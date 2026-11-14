@@ -1,0 +1,17 @@
+# downloaded and intermediate data (large, re-creatable)
+data/
+
+# local settings
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store

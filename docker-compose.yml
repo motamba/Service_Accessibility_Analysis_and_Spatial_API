@@ -1,0 +1,45 @@
+name: banjul-access
+
+x-db-env: &db-env
+  PGHOST: db
+  PGPORT: "5432"
+  PGDATABASE: gis
+  PGUSER: ${POSTGRES_USER:-gis}
+  PGPASSWORD: ${POSTGRES_PASSWORD:-gis}
+
+services:
+  db:
+    # PostgreSQL 17 + PostGIS 3.5 + pgRouting 3.8.0 (exact tag pinned for reproducibility)
+    image: pgrouting/pgrouting:17-3.5-3.8.0
+    environment:
+      POSTGRES_DB: gis
+      POSTGRES_USER: ${POSTGRES_USER:-gis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gis}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # Check over TCP: during first-time initialisation the entrypoint runs a temporary
+      # server on the Unix socket only, which would otherwise pass this check too early.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d gis"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  etl:
+    # Runs the data pipeline once, then exits. Re-running is cheap: finished steps are skipped.
+    build: ./etl
+    # Run as the host user so files written to ./data are not owned by root.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+    volumes:
+      - ./data:/data
+
+volumes:
+  pgdata: {}
