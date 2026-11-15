@@ -40,7 +40,7 @@ all:
 > @echo "Pipeline finished."
 > @$(MAKE) --no-print-directory status
 
-pipeline: $(STATE)/land
+pipeline: $(STATE)/land $(STATE)/network
 
 # Stamps live in ./data but the database lives in a Docker volume. If the database was
 # recreated (e.g. `docker compose down -v`), the stamps are stale: forget them.
@@ -101,4 +101,23 @@ $(STATE)/land: $(CLIP_PBF) $(SQL)/15_land.sql
 >     -o $(WORK)/water.osm.pbf
 > $(OGR) -nln ref.water_raw -nlt PROMOTE_TO_MULTI $(WORK)/water.osm.pbf multipolygons
 > $(PSQLF) -f $(SQL)/15_land.sql
+> touch $@
+
+# ---------------------------------------------------------------- road network
+# osm2pgrouting reads OSM XML only; filtering to highway ways first keeps the file small.
+$(WORK)/roads.osm: $(CLIP_PBF)
+> osmium tags-filter --overwrite $(CLIP_PBF) w/highway -o $(WORK)/roads.osm.pbf
+> osmium cat --overwrite $(WORK)/roads.osm.pbf -o $@
+
+# Raw import: net.ways, net.ways_vertices_pgr, net.configuration
+$(STATE)/roads: $(WORK)/roads.osm config/mapconfig.xml $(STATE)/schemas
+> osm2pgrouting --f $(WORK)/roads.osm --conf config/mapconfig.xml --schema net --clean \
+>     --dbname $(PGDATABASE) --host $(PGHOST) --port $(PGPORT) --username $(PGUSER) --password $(PGPASSWORD) \
+>     | grep -vE '^\s*$$|^ *\[' || true
+> $(PSQL) -tAc "SELECT count(*) || ' ways imported' FROM net.ways"
+> touch $@
+
+# Clean edge table, speeds, scenarios, connected components
+$(STATE)/network: $(STATE)/roads $(SQL)/20_network.sql config/speeds.csv config/scenarios.csv
+> $(PSQLF) -f $(SQL)/20_network.sql
 > touch $@

@@ -46,6 +46,36 @@ Total area 283.4 km², of which 271.5 km² is land after removing OSM water area
 
 ---
 
+## Assumptions
+
+Travel times use simple, fixed speeds. They describe free-flowing conditions, not real traffic.
+
+| Item | Value |
+|---|---|
+| Walking speed | 4.5 km/h on every road and path |
+| Driving speeds by OSM `highway` class (km/h) | trunk 60 · primary 50 · secondary 40 · tertiary 30 · unclassified / residential / living_street / road 20 · service 15 · track 10 · links 25–40 · footway, path, pedestrian, steps, cycleway, bridleway: no driving |
+| One-way streets | Respected for driving, ignored for walking |
+| Ferries | Excluded |
+| Disconnected road fragments | Only the main connected network is used: for driving, the largest *strongly* connected part (every node can both reach and be reached) |
+| Measuring CRS | WGS 84 / UTM zone 28N (EPSG:32628) |
+
+Speeds are in [`etl/config/speeds.csv`](etl/config/speeds.csv). The sensitivity scenarios in [`etl/config/scenarios.csv`](etl/config/scenarios.csv) re-run the analysis with walking at 4.0 and 5.0 km/h, and with all driving speeds × 0.6 as a simple congestion proxy.
+
+---
+
+## Data quality (current run)
+
+| Measure | Value |
+|---|---|
+| Road segments / junctions | 49,747 / 34,071 |
+| Road length (of which drivable) | 4,539 km (4,423 km) |
+| One-way segments | 1,095 |
+| Road length in the main connected network | walking 99.3 % (29 fragments), driving 99.3 % (9 fragments) |
+
+Sanity check: Albert Market (Banjul) to Serekunda market takes 14 min by car (13.4 km, free flow) and 174 min on foot (13.2 km); the straight-line distance is 10.9 km.
+
+---
+
 ## Data sources and licences
 
 | Data | Source | Licence | Used for |

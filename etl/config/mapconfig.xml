@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  osm2pgrouting configuration: which OSM ways become routing edges.
+  Only `highway` ways are imported (ferry routes are excluded: they are tagged route=ferry).
+  maxspeed here is a placeholder required by osm2pgrouting; the speeds actually used are in
+  speeds.csv, applied in sql/20_network.sql, so they can be documented and varied per scenario.
+-->
+<configuration>
+  <tag_name name="highway" id="1">
+    <tag_value name="trunk"          id="101" priority="1.0" maxspeed="60" />
+    <tag_value name="trunk_link"     id="102" priority="1.0" maxspeed="40" />
+    <tag_value name="primary"        id="103" priority="1.0" maxspeed="50" />
+    <tag_value name="primary_link"   id="104" priority="1.0" maxspeed="35" />
+    <tag_value name="secondary"      id="105" priority="1.0" maxspeed="40" />
+    <tag_value name="secondary_link" id="106" priority="1.0" maxspeed="30" />
+    <tag_value name="tertiary"       id="107" priority="1.0" maxspeed="30" />
+    <tag_value name="tertiary_link"  id="108" priority="1.0" maxspeed="25" />
+    <tag_value name="unclassified"   id="109" priority="1.0" maxspeed="20" />
+    <tag_value name="residential"    id="110" priority="1.0" maxspeed="20" />
+    <tag_value name="living_street"  id="111" priority="1.0" maxspeed="20" />
+    <tag_value name="road"           id="112" priority="1.0" maxspeed="20" />
+    <tag_value name="service"        id="113" priority="1.0" maxspeed="15" />
+    <tag_value name="track"          id="114" priority="1.0" maxspeed="10" />
+    <tag_value name="pedestrian"     id="115" priority="1.0" maxspeed="5" />
+    <tag_value name="footway"        id="116" priority="1.0" maxspeed="5" />
+    <tag_value name="path"           id="117" priority="1.0" maxspeed="5" />
+    <tag_value name="steps"          id="118" priority="1.0" maxspeed="5" />
+    <tag_value name="cycleway"       id="119" priority="1.0" maxspeed="5" />
+    <tag_value name="bridleway"      id="120" priority="1.0" maxspeed="5" />
+  </tag_name>
+</configuration>

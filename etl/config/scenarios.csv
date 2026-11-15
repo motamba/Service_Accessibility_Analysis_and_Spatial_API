@@ -1,0 +1,5 @@
+scenario,walk_kmh,drive_factor,description
+base,4.5,1.0,Base assumptions
+walk_slow,4.0,1.0,"Slower walking (heat, uneven surfaces, carrying children)"
+walk_fast,5.0,1.0,Faster walking
+drive_congested,4.5,0.6,All driving speeds x 0.6 as a simple congestion proxy

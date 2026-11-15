@@ -1,0 +1,21 @@
+highway,drive_kmh,note
+trunk,60,
+trunk_link,40,
+primary,50,
+primary_link,35,
+secondary,40,
+secondary_link,30,
+tertiary,30,
+tertiary_link,25,
+unclassified,20,
+residential,20,
+living_street,20,
+road,20,class unknown
+service,15,
+track,10,mostly unpaved
+pedestrian,,walking only
+footway,,walking only
+path,,walking only
+steps,,walking only
+cycleway,,walking only
+bridleway,,walking only
