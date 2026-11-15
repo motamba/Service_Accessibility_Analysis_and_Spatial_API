@@ -32,6 +32,16 @@ COUNTRY_PBF := $(RAW)/osm/senegal-and-gambia-latest.osm.pbf
 ADMIN2      := $(RAW)/boundaries/gmb_admin2.geojson
 CLIP_PBF    := $(WORK)/greater_banjul.osm.pbf
 
+# Google Open Buildings v3, points only, S2 level-4 tile 0ed (covers all of The Gambia).
+OB_URL        := https://storage.googleapis.com/open-buildings-data/v3/points_s2_level_4_gzip/0ed_buildings.csv.gz
+BUILDINGS_CSV := $(RAW)/buildings/0ed_buildings.csv.gz
+# Tile 0ed's confidence threshold for 85 % precision, from v3/score_thresholds_s2_level_4.csv
+OB_MIN_CONFIDENCE := 0.782
+
+# Public health facilities in sub-Saharan Africa (Maina et al. 2019, Sci Data 6:134), CC BY 4.0
+MAINA_URL := https://data.humdata.org/dataset/eb1ba830-9464-43c8-9370-28cee0c99f5d/resource/341668a3-7066-46e4-aca0-fe09c57f9314/download/suhsharan_health_facilities.zip
+MAINA_SHP := $(RAW)/health_ssa/sub-saharan_health_facilities.shp
+
 .PHONY: all pipeline sync-state reset status
 # Two stages (recursive make) so the stamp files are re-read after sync-state.
 all:
@@ -40,7 +50,9 @@ all:
 > @echo "Pipeline finished."
 > @$(MAKE) --no-print-directory status
 
-pipeline: $(STATE)/land $(STATE)/network
+pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings
+> $(PSQLF) -f $(SQL)/90_checks.sql
+> @echo "Data-quality checks passed."
 
 # Stamps live in ./data but the database lives in a Docker volume. If the database was
 # recreated (e.g. `docker compose down -v`), the stamps are stale: forget them.
@@ -57,14 +69,14 @@ status:
 # ---------------------------------------------------------------- downloads
 $(COUNTRY_PBF):
 > mkdir -p $(@D)
-> curl -fSL --retry 3 -o $@.part $(GEOFABRIK_URL)
+> curl -fsSL --retry 3 -o $@.part $(GEOFABRIK_URL)
 > curl -fsSL -o $@.md5 $(GEOFABRIK_URL).md5
 > echo "$$(cut -d' ' -f1 $@.md5)  $@.part" | md5sum -c -
 > mv $@.part $@
 
 $(ADMIN2):
 > mkdir -p $(@D)
-> curl -fSL --retry 3 -o $(@D)/cod_ab.geojson.zip "$(CODAB_URL)"
+> curl -fsSL --retry 3 -o $(@D)/cod_ab.geojson.zip "$(CODAB_URL)"
 > unzip -o -q $(@D)/cod_ab.geojson.zip -d $(@D)
 > touch $@
 
@@ -120,4 +132,52 @@ $(STATE)/roads: $(WORK)/roads.osm config/mapconfig.xml $(STATE)/schemas
 # Clean edge table, speeds, scenarios, connected components
 $(STATE)/network: $(STATE)/roads $(SQL)/20_network.sql config/speeds.csv config/scenarios.csv
 > $(PSQLF) -f $(SQL)/20_network.sql
+> touch $@
+
+# ---------------------------------------------------------------- facilities
+# GDAL's default OSM config does not keep amenity/healthcare on points: add them.
+$(WORK)/osmconf.ini:
+> mkdir -p $(@D)
+> sed -E -e '/^\[points\]/,/^attributes=/ s/^attributes=.*/&,amenity,healthcare,operator/' \
+>        -e '/^\[multipolygons\]/,/^attributes=/ s/^attributes=.*/&,healthcare,operator/' \
+>        /usr/share/gdal/osmconf.ini > $@
+
+$(MAINA_SHP):
+> mkdir -p $(@D)
+> curl -fsSL --retry 3 -o $(@D)/ssa_hf.zip "$(MAINA_URL)"
+> unzip -o -q $(@D)/ssa_hf.zip -d $(@D)
+> touch $@
+
+$(STATE)/facilities: $(CLIP_PBF) $(MAINA_SHP) $(WORK)/osmconf.ini $(SQL)/30_facilities.sql $(STATE)/network
+> $(OGR) -nln ref.maina_raw -where "Country = 'Gambia'" $(MAINA_SHP)
+> $(PSQL) -c "INSERT INTO meta.dataset (name, source_url, licence, data_date) \
+>             VALUES ('health_facilities_maina2019', '$(MAINA_URL)', 'CC BY 4.0 (Maina et al. 2019, Sci Data 6:134)', '2019') \
+>             ON CONFLICT (name) DO UPDATE SET retrieved_at = now()"
+> osmium tags-filter --overwrite $(CLIP_PBF) \
+>     nwr/amenity=hospital,clinic,doctors,school nwr/healthcare=hospital,clinic,centre,doctor \
+>     -o $(WORK)/facilities.osm.pbf
+> $(OGR) --config OSM_CONFIG_FILE $(WORK)/osmconf.ini -nln ref.fac_points_raw \
+>     $(WORK)/facilities.osm.pbf points
+> $(OGR) --config OSM_CONFIG_FILE $(WORK)/osmconf.ini -nln ref.fac_polys_raw -nlt PROMOTE_TO_MULTI \
+>     $(WORK)/facilities.osm.pbf multipolygons
+> $(PSQLF) -f $(SQL)/30_facilities.sql
+> touch $@
+
+# ---------------------------------------------------------------- buildings
+$(BUILDINGS_CSV):
+> mkdir -p $(@D)
+> curl -fsSL --retry 3 -o $@.part $(OB_URL)
+> mv $@.part $@
+
+# Only rows inside the study-area bounding box and above the confidence threshold are loaded.
+$(STATE)/buildings: $(BUILDINGS_CSV) $(SQL)/35_buildings.sql $(STATE)/land
+> BBOX=$$($(PSQL) -tA -F' ' -c "SELECT ST_XMin(b), ST_YMin(b), ST_XMax(b), ST_YMax(b) FROM (SELECT ST_Transform(geom, 4326)::box2d AS b FROM ref.study_area) t"); \
+> $(OGR) -s_srs EPSG:4326 -nln ref.buildings_raw -nlt POINT -gt 100000 \
+>     -oo X_POSSIBLE_NAMES=longitude -oo Y_POSSIBLE_NAMES=latitude -oo AUTODETECT_TYPE=YES \
+>     -spat $$BBOX -where "confidence >= $(OB_MIN_CONFIDENCE)" /vsigzip/$(BUILDINGS_CSV)
+> $(PSQLF) -f $(SQL)/35_buildings.sql
+> $(PSQL) -c "INSERT INTO meta.dataset (name, source_url, licence, data_date) \
+>             VALUES ('buildings', '$(OB_URL)', 'CC BY 4.0 / ODbL 1.0 (Google Open Buildings v3)', \
+>                     'v3 (May 2023), confidence >= $(OB_MIN_CONFIDENCE)') \
+>             ON CONFLICT (name) DO UPDATE SET data_date = EXCLUDED.data_date, retrieved_at = now()"
 > touch $@

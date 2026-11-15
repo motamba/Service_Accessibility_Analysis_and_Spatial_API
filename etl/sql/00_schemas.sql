@@ -6,6 +6,7 @@
 --   meta : import counts, data provenance, pipeline runs
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pgrouting;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- name similarity when merging facility sources
 
 CREATE SCHEMA IF NOT EXISTS ref;
 CREATE SCHEMA IF NOT EXISTS net;

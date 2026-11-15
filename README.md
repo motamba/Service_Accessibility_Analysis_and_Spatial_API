@@ -63,6 +63,22 @@ Speeds are in [`etl/config/speeds.csv`](etl/config/speeds.csv). The sensitivity 
 
 ---
 
+## Facilities
+
+| Type | What counts | Source |
+|---|---|---|
+| Health | OSM `amenity` = hospital, clinic, doctors, or `healthcare` = hospital, clinic, centre, doctor. Pharmacies, dentists and other specialists are not counted. | OpenStreetMap, plus public facilities from Maina et al. (2019) |
+| School | OSM `amenity=school`. Kindergartens, colleges and universities are not counted. | OpenStreetMap |
+
+How the facility layer is built:
+
+- A facility mapped as an area becomes a point with `ST_PointOnSurface`. A point of the same type within 50 m of an area is treated as the same facility.
+- **OpenStreetMap alone misses many public health centres** in Greater Banjul (e.g. Bakau, Banjul Polyclinic, Brufut, Leman Street). They are added from the Maina et al. (2019) list of public health facilities.
+- Maina coordinates are geocoded and can be 0.5–2 km off, so the two sources are matched **by name** (trigram similarity of names without generic words such as "health centre"), within 2.5 km, keeping only mutual best matches. Matched facilities keep the OSM location. The matches are stored in `svc.facility_matches`.
+- Each facility is snapped to the nearest junction of the main road network, separately for walking and driving. Facilities in the 5 km buffer that are more than 1 km from any road cannot serve the study area and are dropped (e.g. Essau, across the river).
+
+---
+
 ## Data quality (current run)
 
 | Measure | Value |
@@ -71,6 +87,11 @@ Speeds are in [`etl/config/speeds.csv`](etl/config/speeds.csv). The sensitivity 
 | Road length (of which drivable) | 4,539 km (4,423 km) |
 | One-way segments | 1,095 |
 | Road length in the main connected network | walking 99.3 % (29 fragments), driving 99.3 % (9 fragments) |
+| Health facilities in the study area | 37: 26 from OSM + 11 added from Maina et al. (5 more Maina facilities matched to OSM) — 21 hospitals, 6 health centres, 10 clinics |
+| Schools in the study area | 81 (all OSM); 15.5 % without a name |
+| Facilities in the 5 km buffer (also used for routing) | 47 health, 103 schools; 1 dropped as unreachable |
+| Distance from facility to the road network | median 47 m, max 284 m; none over 500 m |
+| Buildings in the study area | 160,491 (Google Open Buildings v3, confidence ≥ 0.782) |
 
 Sanity check: Albert Market (Banjul) to Serekunda market takes 14 min by car (13.4 km, free flow) and 174 min on foot (13.2 km); the straight-line distance is 10.9 km.
 
@@ -82,11 +103,19 @@ Sanity check: Albert Market (Banjul) to Serekunda market takes 14 min by car (13
 |---|---|---|---|
 | Roads, facilities, water | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Geofabrik](https://download.geofabrik.de/africa/senegal-and-gambia.html) "Senegal and Gambia" extract | [ODbL 1.0](https://opendatacommons.org/licenses/odbl/) — © OpenStreetMap contributors | Routing graph, facilities, water mask |
 | Administrative boundaries | [OCHA COD-AB, The Gambia](https://data.humdata.org/dataset/cod-ab-gmb) (HDX) | CC BY-IGO | Study area |
-| Buildings | Google Open Buildings v3 *(to be added, day 4)* | CC BY 4.0 / ODbL | Counting buildings in gap areas |
+| Public health facilities | Maina, J. et al. (2019). *A spatial database of health facilities managed by the public health sector in sub-Saharan Africa.* Scientific Data 6, 134. Via [HDX](https://data.humdata.org/dataset/health-facilities-in-sub-saharan-africa) | CC BY 4.0 | Health facilities missing from OSM |
+| Buildings | [Google Open Buildings v3](https://sites.research.google/open-buildings/), points, tile `0ed` | CC BY 4.0 / ODbL 1.0 | Counting buildings in gap areas and travel-time bands |
 
-The exact OSM data date is stored in the database table `meta.dataset` and will be listed here with the results.
+Buildings are kept when their confidence is at least **0.782**, Google's published threshold for 85 % precision in this tile. The exact OSM data date is stored in the database table `meta.dataset` and will be listed here with the results.
 
-**Share-alike:** the published GeoJSON layers are derived from OpenStreetMap and are therefore made available under the ODbL.
+**Share-alike:** the published GeoJSON layers are derived from OpenStreetMap and are therefore made available under the ODbL, with attribution to all sources above.
+
+### Known data limitations
+
+- **Schools are probably under-counted.** OSM has 81 schools in the study area and no open alternative list was found; areas may show as "gaps" because a school is not mapped.
+- **OSM tags are sometimes wrong** (e.g. a pharmacy tagged as a hospital, clinics tagged as hospitals), so facility subtypes are indicative.
+- **The public facility list is from 2019** and covers public, NGO and community facilities only; private clinics come from OSM alone.
+- **Building points are detected from satellite imagery** and include some false detections and missed buildings.
 
 ---
 
