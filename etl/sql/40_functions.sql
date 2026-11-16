@@ -115,3 +115,55 @@ BEGIN
     GET DIAGNOSTICS n = ROW_COUNT;
     RETURN n;
 END $$;
+
+-- ------------------------------------------------------------------ travel time per grid cell
+CREATE TABLE IF NOT EXISTS svc.cell_access (
+    type        text    NOT NULL,
+    mode        text    NOT NULL,
+    scenario    text    NOT NULL,
+    cell_id     int     NOT NULL,
+    facility_id int     NOT NULL,
+    seconds     double precision NOT NULL,
+    PRIMARY KEY (type, mode, scenario, cell_id)
+);
+
+-- Time from a cell to its nearest facility = best over the cell's nearby edges (svc.cell_edges)
+-- of: the time along the edge from the closest point to one end, plus that end's node time.
+-- Going towards the source end means travelling target->source along the edge, so for driving
+-- that end is only usable if the edge allows that direction (one-way streets).
+-- The walk from the cell centre to the road (<= 150 m) is not added to the time.
+CREATE OR REPLACE FUNCTION svc.compute_cell_access(p_type text, p_mode text, p_scenario text)
+RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+    s net.scenarios%ROWTYPE;
+    n bigint;
+BEGIN
+    SELECT * INTO s FROM net.scenarios WHERE scenario = p_scenario;
+    IF NOT FOUND THEN RAISE EXCEPTION 'Unknown scenario: %', p_scenario; END IF;
+
+    DELETE FROM svc.cell_access WHERE type = p_type AND mode = p_mode AND scenario = p_scenario;
+
+    INSERT INTO svc.cell_access (type, mode, scenario, cell_id, facility_id, seconds)
+    SELECT DISTINCT ON (cell_id) p_type, p_mode, p_scenario, cell_id, facility_id, seconds
+    FROM (
+        SELECT ce.cell_id, a.facility_id, a.seconds + along.sec AS seconds
+        FROM svc.cell_edges ce
+        JOIN net.edges e ON e.id = ce.edge_id
+        CROSS JOIN LATERAL (
+            SELECT CASE WHEN p_mode = 'walk' THEN e.length_m / (s.walk_kmh / 3.6)
+                        ELSE e.length_m / (e.drive_kmh * s.drive_factor / 3.6) END AS full_sec
+        ) c
+        -- the two ways out of the edge: to the source end, or to the target end
+        CROSS JOIN LATERAL (VALUES
+            (e.source, ce.frac       * c.full_sec, p_mode = 'walk' OR e.bwd_ok),
+            (e.target, (1 - ce.frac) * c.full_sec, p_mode = 'walk' OR e.fwd_ok)
+        ) AS along(node_id, sec, allowed)
+        JOIN svc.node_access a
+          ON a.node_id = along.node_id AND a.type = p_type AND a.mode = p_mode AND a.scenario = p_scenario
+        WHERE ce.mode = p_mode AND along.allowed
+    ) x
+    ORDER BY cell_id, seconds, facility_id;
+
+    GET DIAGNOSTICS n = ROW_COUNT;
+    RETURN n;
+END $$;

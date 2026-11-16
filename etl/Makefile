@@ -11,6 +11,7 @@ SHELL         := /bin/bash
 .DELETE_ON_ERROR:
 
 include config/study_area.env
+include config/analysis.env
 
 DATA  ?= /data
 RAW   := $(DATA)/raw
@@ -50,7 +51,7 @@ all:
 > @echo "Pipeline finished."
 > @$(MAKE) --no-print-directory status
 
-pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access
+pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access $(STATE)/results
 > $(PSQLF) -f $(SQL)/90_checks.sql
 > @echo "Data-quality checks passed."
 
@@ -186,4 +187,14 @@ $(STATE)/buildings: $(BUILDINGS_CSV) $(SQL)/35_buildings.sql $(STATE)/land
 $(STATE)/access: $(SQL)/40_functions.sql $(SQL)/50_node_access.sql $(STATE)/facilities $(STATE)/network
 > $(PSQLF) -f $(SQL)/40_functions.sql
 > $(PSQLF) -f $(SQL)/50_node_access.sql
+> touch $@
+
+# ---------------------------------------------------------------- grid, service areas, gaps, coverage
+$(STATE)/grid: $(SQL)/55_grid.sql config/analysis.env $(STATE)/land $(STATE)/buildings $(STATE)/network
+> $(PSQLF) -v cell_m=$(CELL_M) -v access_m=$(ACCESS_M) -f $(SQL)/55_grid.sql
+> touch $@
+
+$(STATE)/results: $(SQL)/60_results.sql $(SQL)/40_functions.sql $(STATE)/grid $(STATE)/access
+> $(PSQLF) -f $(SQL)/40_functions.sql
+> $(PSQLF) -f $(SQL)/60_results.sql
 > touch $@

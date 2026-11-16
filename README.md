@@ -97,6 +97,46 @@ Median time from a road junction in the study area to the nearest facility (all 
 
 ---
 
+## Method: service areas, gaps and coverage
+
+All area results come from one **50 m analysis grid** over the land part of the study area (111,954 cells), so the map and the statistics always agree.
+
+1. **Nearby roads.** Each cell is linked to up to 3 usable roads within **150 m** of its centre, separately for walking and driving. About a quarter of the land (mostly mangroves and undeveloped land) has no road that close and counts as *not reachable*.
+2. **Cell travel time.** For each road, the time from the cell's closest point on that road to either end of the road, plus that junction's time to the nearest facility. For driving, an end is used only if the road may be driven in that direction. The cell keeps the fastest option. The walk from home to the road is not added.
+3. **Service area** for a time band = union of the cells within the band (`ST_CoverageUnion`), clipped to land.
+4. **Gaps** = land outside the service area, one polygon per separate area (slivers under 0.5 ha dropped), with the number of buildings inside.
+5. **Coverage** = share of buildings whose cell is within the band.
+
+Time bands: walking 15 / 30 / 60 min, driving 5 / 10 / 15 min. Grid settings are in [`etl/config/analysis.env`](etl/config/analysis.env).
+
+A first version buffered the reachable road pieces directly. It took about 3 minutes for one polygon, and 30 polygons were needed; the grid method computes everything in about 2 minutes.
+
+---
+
+## Results (indicative)
+
+Share of buildings within each travel time of the nearest facility (160,489 buildings; base speeds):
+
+| | Walk 15 min | Walk 30 min | Walk 60 min | Drive 5 min | Drive 10 min | Drive 15 min |
+|---|---|---|---|---|---|---|
+| Health facility | 37.6 % | 75.8 % | 97.1 % | 70.7 % | 93.5 % | 99.8 % |
+| School | 60.0 % | 92.0 % | 99.8 % | 87.1 % | 99.6 % | 99.8 % |
+
+**Sensitivity to the assumed speeds** (share of buildings covered):
+
+| | Base | Walking 4.0 km/h | Walking 5.0 km/h | Driving × 0.6 |
+|---|---|---|---|---|
+| Health, walk 30 min | 75.8 % | 71.3 % | 79.2 % | – |
+| School, walk 15 min | 60.0 % | 52.2 % | 67.5 % | – |
+| Health, drive 5 min | 70.7 % | – | – | 40.2 % |
+| Health, drive 10 min | 93.5 % | – | – | 78.1 % |
+
+**Largest gap:** about 38,900 buildings (24 %) are more than a 30-minute walk from a health facility. Most of them (33,600) are in one connected area in eastern Kombo North, between Lamin, Yundum and Banjulinding.
+
+These are indicative estimates. They depend on how complete OpenStreetMap is (schools in particular may be under-mapped) and on the assumed speeds.
+
+---
+
 ## Data quality (current run)
 
 | Measure | Value |

@@ -60,6 +60,17 @@ BEGIN
         END IF;
     END LOOP;
 
+    -- Results: valid geometries, and coverage can only grow with a longer time band.
+    SELECT count(*) INTO n FROM res.service_areas WHERE NOT ST_IsValid(geom);
+    IF n > 0 THEN RAISE EXCEPTION '% invalid service-area geometries', n; END IF;
+    SELECT count(*) INTO n FROM res.gaps WHERE NOT ST_IsValid(geom);
+    IF n > 0 THEN RAISE EXCEPTION '% invalid gap geometries', n; END IF;
+
+    SELECT count(*) INTO n
+    FROM res.coverage a JOIN res.coverage b USING (type, mode, scenario)
+    WHERE a.minutes < b.minutes AND a.buildings_in > b.buildings_in;
+    IF n > 0 THEN RAISE EXCEPTION 'Coverage decreases with a longer time band in % cases', n; END IF;
+
     -- ---------------------------------------------------------------- warnings
     SELECT round((100 - 100 * sum(length_m) FILTER (WHERE walk_ok) / sum(length_m))::numeric, 2) INTO pct FROM net.edges;
     IF pct > 5 THEN
