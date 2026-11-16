@@ -79,6 +79,24 @@ How the facility layer is built:
 
 ---
 
+## Method: travel time to the nearest facility
+
+For every junction of the road network, the pipeline computes the travel time to the nearest facility of each type, for each mode and speed scenario (`svc.node_access`).
+
+- **One search per facility type, mode and scenario.** A virtual *super-source* node is joined to every facility by a zero-cost edge, and a single `pgr_drivingDistance` (Dijkstra) run from it gives each junction its time to the nearest facility (up to 60 min). Following the search tree back to its root shows which facility that is.
+- **Direction matters for driving.** Times are measured from the junction *to* the facility, so for driving the search runs on the reversed graph (one-way streets are traversed backwards).
+- **Independently checked.** At the end of every run, the times of a fixed sample of junctions are recomputed with `pgr_dijkstraCost` on the forward graph and must match to 0.01 s.
+- **Why not pgRouting's built-in multi-root mode?** With `equicost => true`, pgRouting 3.8.0 returned non-optimal times for some junctions (for example 1,175 s instead of 1,162 s). The cross-check caught this, and the super-source method replaced it.
+
+Median time from a road junction in the study area to the nearest facility (all scenarios):
+
+| | Walk 4.0 / 4.5 / 5.0 km/h | Drive free flow / congested (× 0.6) |
+|---|---|---|
+| Health facility | 22.4 / **20.6** / 18.8 min | **4.1** / 6.9 min |
+| School | 16.8 / **15.0** / 13.5 min | **3.0** / 5.0 min |
+
+---
+
 ## Data quality (current run)
 
 | Measure | Value |

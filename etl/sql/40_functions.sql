@@ -51,13 +51,17 @@ CREATE TABLE IF NOT EXISTS svc.node_access (
 );
 
 -- ------------------------------------------------------------------ nearest facility per node
--- One pgr_drivingDistance call per (type, mode, scenario), with all facility nodes as roots.
--- Each root's shortest-path tree is returned (equicost => false) and the cheapest root per node
--- is kept with DISTINCT ON. Nodes not reached within p_max_seconds get no row.
+-- Multi-source shortest paths with a virtual SUPER-SOURCE (node -1):
+--   * a zero-cost edge goes from -1 to every facility node (one-way: -1 -> facility);
+--   * ONE pgr_drivingDistance from -1 then gives every node its time to the NEAREST facility,
+--     in a single Dijkstra run, however many facilities there are;
+--   * the facility is found by following the search tree (pred) back to the node just below -1.
+-- Nodes not reached within p_max_seconds get no row (= further than the limit).
 --
--- Why not equicost => true (which does this inside pgRouting)? On this network pgRouting 3.8.0
--- returned non-optimal times for some nodes with equicost (e.g. 1174.96 s instead of 1161.68 s,
--- found by the cross-check in 90_checks.sql), so the minimum is taken explicitly here.
+-- Why not pgRouting's own multi-root mode? With equicost => true, pgRouting 3.8.0 returned
+-- non-optimal times for some nodes (e.g. 1174.96 s instead of 1161.68 s, caught by the
+-- cross-check in 90_checks.sql); with equicost => false it returns one full tree per facility,
+-- which is exact but far too slow (100+ trees over the whole network).
 CREATE OR REPLACE FUNCTION svc.compute_node_access(p_type text, p_mode text, p_scenario text,
                                                    p_max_seconds double precision DEFAULT 3600)
 RETURNS bigint LANGUAGE plpgsql AS $$
@@ -73,25 +77,39 @@ BEGIN
         RAISE EXCEPTION 'No % facilities snapped for mode %', p_type, p_mode;
     END IF;
 
+    -- Search tree from the super-source.
+    DROP TABLE IF EXISTS pg_temp.tree;
+    CREATE TEMP TABLE tree ON COMMIT DROP AS
+    SELECT dd.node, dd.pred, dd.agg_cost
+    FROM pgr_drivingDistance(
+            format('%s UNION ALL
+                    SELECT -row_number() OVER () AS id, -1::bigint AS source, s AS target,
+                           0::float8 AS cost, -1::float8 AS reverse_cost
+                    FROM unnest(%L::bigint[]) AS s',
+                   svc.edges_sql(p_mode, p_scenario, p_reversed => p_mode = 'drive'), starts),
+            -1,
+            p_max_seconds,
+            directed => true) dd
+    WHERE dd.node <> -1;          -- the super-source's own row (its own parent) would loop forever
+    CREATE INDEX ON tree (pred);
+    ANALYZE tree;                 -- without statistics the recursive walk gets a very slow plan
+
     DELETE FROM svc.node_access
     WHERE type = p_type AND mode = p_mode AND scenario = p_scenario;
 
+    -- Walk the tree top-down: facility nodes (pred = -1) are roots and pass their id down.
     INSERT INTO svc.node_access (type, mode, scenario, node_id, facility_id, seconds)
-    SELECT p_type, p_mode, p_scenario, dd.node, fac.facility_id, dd.agg_cost
-    FROM (
-        SELECT DISTINCT ON (node) node, start_vid, agg_cost
-        FROM pgr_drivingDistance(
-                svc.edges_sql(p_mode, p_scenario, p_reversed => p_mode = 'drive'),
-                starts,
-                p_max_seconds,
-                directed => p_mode = 'drive',
-                equicost => false)
-        ORDER BY node, agg_cost, start_vid
-    ) dd
+    WITH RECURSIVE down AS (
+        SELECT t.node, t.node AS root, t.agg_cost FROM tree t WHERE t.pred = -1
+        UNION ALL
+        SELECT t.node, d.root, t.agg_cost FROM tree t JOIN down d ON t.pred = d.node
+    )
+    SELECT p_type, p_mode, p_scenario, d.node, fac.facility_id, d.agg_cost
+    FROM down d
     -- Several facilities can snap to the same node; the lowest id represents them.
     CROSS JOIN LATERAL (
         SELECT fn.facility_id FROM svc.facility_nodes fn JOIN svc.facilities f ON f.id = fn.facility_id
-        WHERE fn.node_id = dd.start_vid AND fn.mode = p_mode AND f.type = p_type
+        WHERE fn.node_id = d.root AND fn.mode = p_mode AND f.type = p_type
         ORDER BY fn.facility_id LIMIT 1) fac;
 
     GET DIAGNOSTICS n = ROW_COUNT;
