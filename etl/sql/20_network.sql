@@ -19,6 +19,7 @@ CREATE TABLE net.speeds (
 DROP TABLE IF EXISTS net.scenarios CASCADE;
 CREATE TABLE net.scenarios (
     scenario     text PRIMARY KEY,
+    applies_to   text    NOT NULL CHECK (applies_to IN ('walk', 'drive', 'both')),
     walk_kmh     numeric NOT NULL CHECK (walk_kmh > 0),
     drive_factor numeric NOT NULL CHECK (drive_factor > 0),
     description  text

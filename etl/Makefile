@@ -50,7 +50,7 @@ all:
 > @echo "Pipeline finished."
 > @$(MAKE) --no-print-directory status
 
-pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings
+pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access
 > $(PSQLF) -f $(SQL)/90_checks.sql
 > @echo "Data-quality checks passed."
 
@@ -180,4 +180,10 @@ $(STATE)/buildings: $(BUILDINGS_CSV) $(SQL)/35_buildings.sql $(STATE)/land
 >             VALUES ('buildings', '$(OB_URL)', 'CC BY 4.0 / ODbL 1.0 (Google Open Buildings v3)', \
 >                     'v3 (May 2023), confidence >= $(OB_MIN_CONFIDENCE)') \
 >             ON CONFLICT (name) DO UPDATE SET data_date = EXCLUDED.data_date, retrieved_at = now()"
+> touch $@
+
+# ---------------------------------------------------------------- travel time to nearest facility
+$(STATE)/access: $(SQL)/40_functions.sql $(SQL)/50_node_access.sql $(STATE)/facilities $(STATE)/network
+> $(PSQLF) -f $(SQL)/40_functions.sql
+> $(PSQLF) -f $(SQL)/50_node_access.sql
 > touch $@

@@ -8,6 +8,8 @@ DECLARE
     pct    numeric;
     names  text;
     t      text;
+    rec    record;
+    diff   double precision;
 BEGIN
     -- ---------------------------------------------------------------- errors
     IF NOT (SELECT bool_and(ST_IsValid(geom)) FROM ref.study_area) THEN
@@ -34,6 +36,29 @@ BEGIN
 
     SELECT count(*) INTO n FROM ref.buildings;
     IF n = 0 THEN RAISE EXCEPTION 'No buildings loaded'; END IF;
+
+    -- Independent check of the multi-source search: for a fixed sample of 15 nodes per
+    -- (type, mode), the cheapest pgr_dijkstraCost from the node to any facility node, on the
+    -- FORWARD graph, must equal the stored time (computed on the reversed graph).
+    FOR rec IN SELECT DISTINCT type, mode FROM svc.node_access WHERE scenario = 'base' LOOP
+        SELECT max(abs(chk.cost - a.seconds)), count(chk.cost) INTO diff, n
+        FROM (SELECT node_id, seconds FROM svc.node_access
+              WHERE type = rec.type AND mode = rec.mode AND scenario = 'base' AND seconds > 0
+              ORDER BY md5(node_id::text) LIMIT 15) a
+        CROSS JOIN LATERAL (
+            SELECT min(dc.agg_cost) AS cost
+            FROM pgr_dijkstraCost(
+                    svc.edges_sql(rec.mode, 'base', false),
+                    a.node_id,
+                    (SELECT array_agg(DISTINCT fn.node_id)
+                     FROM svc.facility_nodes fn JOIN svc.facilities f ON f.id = fn.facility_id
+                     WHERE f.type = rec.type AND fn.mode = rec.mode),
+                    directed => rec.mode = 'drive') dc) chk;
+        IF n < 15 OR diff > 0.01 THEN
+            RAISE EXCEPTION 'Travel-time cross-check failed for % / %: % of 15 nodes checked, max difference % s',
+                rec.type, rec.mode, n, diff;
+        END IF;
+    END LOOP;
 
     -- ---------------------------------------------------------------- warnings
     SELECT round((100 - 100 * sum(length_m) FILTER (WHERE walk_ok) / sum(length_m))::numeric, 2) INTO pct FROM net.edges;
