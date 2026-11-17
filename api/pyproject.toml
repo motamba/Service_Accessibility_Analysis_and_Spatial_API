@@ -1,0 +1,30 @@
+[project]
+name = "banjul-access-api"
+version = "0.1.0"
+description = "REST API (GeoJSON) for travel-time access to health facilities and schools in Greater Banjul"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.160",
+    "uvicorn[standard]>=0.30",
+    "psycopg[binary,pool]>=3.2",
+    "pydantic-settings>=2.4",
+    "geojson-pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.27",
+    "ruff>=0.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

@@ -182,10 +182,36 @@ Buildings are kept when their confidence is at least **0.782**, Google's publish
 ```
 db/init/          database extensions (runs when the volume is first created)
 etl/              data pipeline: Dockerfile, Makefile, config/, sql/
+api/              Python project (uv): API (in progress) and tests
+  tests/          pytest suite; fixtures/ holds the synthetic test network
 data/             downloads and intermediate files (not in git)
 ```
 
-More parts (API, web map, tests) are added as development continues.
+The web map is added as development continues.
+
+---
+
+## Tests
+
+```bash
+docker compose run --rm test                  # all tests
+docker compose run --rm test ruff check .     # lint
+```
+
+The tests build a separate database (`gis_test`) on the same server, so the real data is never touched. Into it they load the pipeline's **own** routing SQL ([`etl/sql/40_functions.sql`](etl/sql/40_functions.sql)) together with a small synthetic network ([`api/tests/fixtures/grid_network.sql`](api/tests/fixtures/grid_network.sql)) where every answer can be worked out by hand: a 5 × 5 grid of junctions 100 m apart, one one-way street and a disconnected island.
+
+What the tests check:
+
+- a point on a facility is 0 minutes from it, and times along the grid are exact (80 s per 100 m on foot, 10 s by car);
+- the nearest of several facilities is chosen, also when two facilities share a junction or are equally far away;
+- driving respects one-way streets and is measured *towards* the facility, while walking ignores one-way streets;
+- every stored driving time equals an independent `pgr_dijkstraCost` result;
+- speed scenarios, the 60-minute limit, unreachable disconnected roads, and the time of a grid cell halfway along a one-way street;
+- unknown scenarios, modes and facility types are rejected.
+
+To check that the tests actually catch mistakes, the routing direction was deliberately broken in a copy of the SQL: 5 of the 18 tests failed.
+
+The pipeline itself also checks the real data on every run ([`etl/sql/90_checks.sql`](etl/sql/90_checks.sql)): valid geometries, every facility snapped, travel times cross-checked against Dijkstra for a sample of junctions, and coverage growing with longer time bands.
 
 ---
 

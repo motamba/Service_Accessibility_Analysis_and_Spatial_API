@@ -41,5 +41,25 @@ services:
     volumes:
       - ./data:/data
 
+  test:
+    # Tests: `docker compose run --rm test`. Builds a separate gis_test database on the same
+    # server, so the real data is never touched. Not started by `docker compose up`.
+    build:
+      context: ./api
+      args:
+        DEV: "true"
+    profiles: ["test"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TEST_DATABASE_ADMIN_URL: postgresql://${POSTGRES_USER:-gis}:${POSTGRES_PASSWORD:-gis}@db:5432/gis
+      ETL_SQL_DIR: /etl-sql
+    volumes:
+      - ./api:/app
+      - ./etl/sql:/etl-sql:ro
+    command: ["pytest"]
+
 volumes:
   pgdata: {}
