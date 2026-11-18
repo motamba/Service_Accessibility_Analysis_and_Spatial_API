@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Greater Banjul Access API</title>
+  <meta name="description" content="Reference for the Greater Banjul Access REST API (OpenAPI).">
+  <style>
+    body { margin: 0; background: #fcfcfb; }
+    .note { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; padding: 10px 16px;
+            background: #f0efec; color: #0b0b0b; border-bottom: 1px solid #e1e0d9; }
+    .note a { color: #2a78d6; }
+  </style>
+</head>
+<body>
+  <p class="note">
+    API reference. The live API runs locally with <code>docker compose up</code>
+    (interactive docs at <code>http://localhost:8000/docs</code>); this demo site serves
+    pre-computed results only. <a href="./">Back to the map</a>
+  </p>
+  <redoc spec-url="openapi.json" hide-download-button="false"></redoc>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@2.5.4/bundles/redoc.standalone.js"
+          integrity="sha384-w447zOpYfw/1Tv/5AK9NfHTlQIqE3RVR6KY62jCyy9zNDgO64cMwGGP1Fj0zJVf5"
+          crossorigin="anonymous"></script>
+</body>
+</html>

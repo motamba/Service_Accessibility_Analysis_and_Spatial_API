@@ -4,6 +4,8 @@ How long does it take to walk or drive to the nearest health facility or school 
 
 This project builds the answer with **PostgreSQL + PostGIS + pgRouting**, serves it through a documented **REST API (FastAPI, GeoJSON)** and shows it on a **web map (MapLibre)**. Everything runs with one `docker compose up`.
 
+**Live demo (static, pre-computed results):** https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/  ·  [API reference](https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/api-docs.html)
+
 > **Status:** in development (personal portfolio project, November–December 2026).
 > Results are **indicative estimates based on OpenStreetMap data** and must not be used for real planning or emergency decisions.
 
@@ -156,7 +158,23 @@ http://localhost:8080 (served by nginx, which also forwards `/api/` to the API).
 
 Built with MapLibre GL JS 5.24 (loaded with a subresource-integrity hash) and an OpenFreeMap basemap (Positron, or Dark when the system is in dark mode); plain HTML, CSS and JavaScript with no build step. The travel-time colours are a single blue ramp checked for colour-vision deficiency and contrast, with separate light and dark versions. On small screens the panel becomes a bottom sheet that can be collapsed.
 
-The same page also runs without a backend (`dataSource: "static"` in [`web/config.js`](web/config.js)), reading pre-exported files instead of the API; this is used for the GitHub Pages demo.
+### Static demo (GitHub Pages)
+
+The same page also runs **without a backend**: with `dataSource: "static"` in [`web/config.js`](web/config.js) it reads pre-exported files from [`web/data/`](web/data/) instead of calling the API. This is the public demo at https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/.
+
+- The files are the API's own responses, exported in-process ([`api/scripts/export_static.py`](api/scripts/export_static.py)): 30 service-area and 30 gap layers, 10 travel-time tables, the hexagons, facilities, statistics and metadata (about 8 MB, much less when compressed). They are committed, so publishing needs no database.
+- Everything works except exact routes: a click shows the typical time of the 200 m hexagon and its nearest facility, with a dashed line instead of the road route.
+- The site also has the API reference ([`web/api-docs.html`](web/api-docs.html), Redoc 2.5.4) built from [`api/openapi.json`](api/openapi.json).
+
+To update the demo after the data or the map changed:
+
+```bash
+docker compose run --rm export          # refresh web/data from the database
+scripts/build_pages.sh                  # optional: build the site locally into _site/
+git add web/data && git commit -m "Update static demo data" && git push
+```
+
+The [`pages.yml`](.github/workflows/pages.yml) workflow then publishes it. One-time setting on GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
 ---
 
@@ -242,11 +260,15 @@ Buildings are kept when their confidence is at least **0.782**, Google's publish
 db/init/          database extensions (runs when the volume is first created)
 etl/              data pipeline: Dockerfile, Makefile, config/, sql/
 api/              Python project (uv): FastAPI app (app/, one SQL file per endpoint in app/sql/) and tests
+  scripts/        export_openapi.py (api/openapi.json), export_static.py (web/data)
   tests/          pytest suite; fixtures/ holds the synthetic test network
 data/             downloads and intermediate files (not in git)
 ```
 
 web/              web map: index.html, app.js, style.css, config.js, nginx.conf (no build step)
+  data/           exported layers for the static demo (ODbL), from `docker compose run --rm export`
+  api-docs.html   API reference page (Redoc) for the static site
+scripts/          build_pages.sh: assembles the GitHub Pages site
 
 ---
 
@@ -294,7 +316,8 @@ The pipeline itself also checks the real data on every run ([`etl/sql/90_checks.
 | Workflow | When | What |
 |---|---|---|
 | [`ci.yml`](.github/workflows/ci.yml) | every push to `main` and every pull request | ruff lint and format check; routing SQL tests against a pgRouting service container; OpenAPI file up to date (API tests are skipped: no pipeline data) |
-| [`e2e.yml`](.github/workflows/e2e.yml) | weekly (Monday 04:00 UTC) and on demand | `docker compose up` with freshly downloaded data, the full pipeline and its checks, all tests including the API tests, and a smoke test of the running API |
+| [`e2e.yml`](.github/workflows/e2e.yml) | weekly (Monday 04:00 UTC) and on demand | `docker compose up` with freshly downloaded data, the full pipeline and its checks, all tests including the API tests, a smoke test of the running API, and the static export and Pages build on the fresh data |
+| [`pages.yml`](.github/workflows/pages.yml) | every push to `main` that changes `web/`, `api/openapi.json` or the build script | builds the static site (map in static mode, `web/data`, API reference) and deploys it to GitHub Pages |
 
 ---
 

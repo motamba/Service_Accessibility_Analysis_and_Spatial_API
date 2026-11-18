@@ -97,5 +97,23 @@ services:
       - ./etl/sql:/etl-sql:ro
     command: ["pytest"]
 
+  export:
+    # Static files for the GitHub Pages demo: `docker compose run --rm export` -> web/data
+    build:
+      context: ./api
+      args:
+        DEV: "true"
+    profiles: ["tools"]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gis}:${POSTGRES_PASSWORD:-gis}@db:5432/gis
+    volumes:
+      - ./api:/app
+      - ./web/data:/out
+    command: ["python", "-m", "scripts.export_static", "/out"]
+
 volumes:
   pgdata: {}

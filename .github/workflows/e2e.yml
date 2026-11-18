@@ -38,6 +38,12 @@ jobs:
           curl --fail --silent --output /dev/null \
             "http://localhost:8000/service-areas?type=health&mode=walk&minutes=30"
 
+      - name: Static export and Pages build work on fresh data
+        run: |
+          docker compose run --rm export
+          test "$(find web/data -name '*.geojson' | wc -l)" -ge 60
+          scripts/build_pages.sh _site
+
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color

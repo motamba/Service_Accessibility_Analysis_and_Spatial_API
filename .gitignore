@@ -1,5 +1,5 @@
-# downloaded and intermediate data (large, re-creatable)
-data/
+# downloaded and intermediate data (large, re-creatable); web/data (exported layers) IS committed
+/data/
 
 # local settings
 .env
@@ -15,3 +15,6 @@ __pycache__/
 .vscode/
 .idea/
 .DS_Store
+
+# GitHub Pages build output (scripts/build_pages.sh)
+_site/
