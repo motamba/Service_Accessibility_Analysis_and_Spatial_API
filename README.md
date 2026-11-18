@@ -234,11 +234,22 @@ The web map is added as development continues.
 ## Tests
 
 ```bash
-docker compose run --rm test                  # all tests
-docker compose run --rm test ruff check .     # lint
+docker compose run --rm test                                     # all tests (50)
+docker compose run --rm test ruff check .                        # lint
+docker compose run --rm test python -m scripts.export_openapi    # update api/openapi.json after API changes
 ```
 
-The tests build a separate database (`gis_test`) on the same server, so the real data is never touched. Into it they load the pipeline's **own** routing SQL ([`etl/sql/40_functions.sql`](etl/sql/40_functions.sql)) together with a small synthetic network ([`api/tests/fixtures/grid_network.sql`](api/tests/fixtures/grid_network.sql)) where every answer can be worked out by hand: a 5 × 5 grid of junctions 100 m apart, one one-way street and a disconnected island.
+There are three groups of tests:
+
+| Group | File | Needs |
+|---|---|---|
+| Routing SQL on a synthetic network (18) | `api/tests/test_routing_sql.py` | any PostgreSQL + PostGIS + pgRouting server |
+| API on the real results (31) | `api/tests/test_api.py` | the pipeline database; skipped if it is not there |
+| OpenAPI file matches the code (1) | `api/tests/test_openapi.py` | nothing |
+
+### Routing SQL tests
+
+The routing tests build a separate database (`gis_test`) on the same server, so the real data is never touched. Into it they load the pipeline's **own** routing SQL ([`etl/sql/40_functions.sql`](etl/sql/40_functions.sql)) together with a small synthetic network ([`api/tests/fixtures/grid_network.sql`](api/tests/fixtures/grid_network.sql)) where every answer can be worked out by hand: a 5 × 5 grid of junctions 100 m apart, one one-way street and a disconnected island.
 
 What the tests check:
 
@@ -251,7 +262,20 @@ What the tests check:
 
 To check that the tests actually catch mistakes, the routing direction was deliberately broken in a copy of the SQL: 5 of the 18 tests failed.
 
+### API tests
+
+The API tests call every endpoint against the pipeline's results and validate each GeoJSON response against the models published in the OpenAPI description. They also check that the numbers agree with each other: buildings in the gaps plus buildings in the service area equal all buildings, a walking route at 4.5 km/h takes the reported time, a point on a facility is 0 minutes away, and longer time bands or faster speeds never cover fewer buildings.
+
+### Pipeline checks
+
 The pipeline itself also checks the real data on every run ([`etl/sql/90_checks.sql`](etl/sql/90_checks.sql)): valid geometries, every facility snapped, travel times cross-checked against Dijkstra for a sample of junctions, and coverage growing with longer time bands.
+
+### Continuous integration (GitHub Actions)
+
+| Workflow | When | What |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | every push to `main` and every pull request | ruff lint and format check; routing SQL tests against a pgRouting service container; OpenAPI file up to date (API tests are skipped: no pipeline data) |
+| [`e2e.yml`](.github/workflows/e2e.yml) | weekly (Monday 04:00 UTC) and on demand | `docker compose up` with freshly downloaded data, the full pipeline and its checks, all tests including the API tests, and a smoke test of the running API |
 
 ---
 

@@ -1,0 +1,2271 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Greater Banjul Access API",
+    "description": "\nTravel-time access to **health facilities** and **schools** in Greater Banjul, The Gambia,\ncomputed with PostgreSQL, PostGIS and pgRouting from OpenStreetMap and other open data.\n\nAll geometries are GeoJSON in WGS 84 (EPSG:4326).\n\n\n**Results are indicative estimates based on OpenStreetMap and other open data and on assumed travel speeds. They must not be used for real planning or emergency decisions.**\n\nData: © OpenStreetMap contributors (ODbL); Maina et al. (2019), CC BY 4.0; Google Open Buildings v3; OCHA COD-AB boundaries.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Service and database status",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/meta": {
+      "get": {
+        "tags": [
+          "status"
+        ],
+        "summary": "Assumptions, settings, data sources and counts",
+        "description": "Everything a client needs to describe the results: what was assumed and why.",
+        "operationId": "info_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/facilities": {
+      "get": {
+        "tags": [
+          "facilities"
+        ],
+        "summary": "Health facilities and schools",
+        "description": "Facilities used in the analysis, as GeoJSON points (WGS 84). Health facilities combine OpenStreetMap with public facilities from Maina et al. (2019); schools come from OpenStreetMap.",
+        "operationId": "facilities_facilities_get",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FacilityType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Facility type; omit for both",
+              "title": "Type"
+            },
+            "description": "Facility type; omit for both"
+          },
+          {
+            "name": "include_buffer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Also return facilities in the 5 km buffer around the study area",
+              "default": false,
+              "title": "Include Buffer"
+            },
+            "description": "Also return facilities in the 5 km buffer around the study area"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "type": "string",
+                  "$ref": "#/components/schemas/FeatureCollection_Feature_Point__FacilityProperties__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/service-areas": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Area within a travel time of the nearest facility",
+        "description": "Land within `minutes` of the nearest facility of `type`, on foot or by car, with the number and share of buildings inside. Time bands: walk 15/30/60, drive 5/10/15 min. Scenarios: base, walk_slow, walk_fast (walking only), drive_congested (driving only).",
+        "operationId": "service_areas_service_areas_get",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FacilityType",
+              "description": "Facility type"
+            },
+            "description": "Facility type"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Mode",
+              "description": "Travel mode"
+            },
+            "description": "Travel mode"
+          },
+          {
+            "name": "minutes",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Time band in minutes",
+              "title": "Minutes"
+            },
+            "description": "Time band in minutes"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Speed scenario",
+              "default": "base",
+              "title": "Scenario"
+            },
+            "description": "Speed scenario"
+          },
+          {
+            "name": "simplify_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100,
+              "minimum": 0,
+              "description": "Simplify outlines by up to this many metres",
+              "default": 10,
+              "title": "Simplify M"
+            },
+            "description": "Simplify outlines by up to this many metres"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "type": "string",
+                  "$ref": "#/components/schemas/FeatureCollection_Feature_MultiPolygon__ServiceAreaProperties__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid combination of mode, minutes and scenario"
+          }
+        }
+      }
+    },
+    "/gaps": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Areas beyond a travel time from any facility",
+        "description": "Land that is NOT within `minutes` of a facility of `type`: one polygon per separate area (slivers under 0.5 ha are left out), with its area and number of buildings, largest number of buildings first. Large gaps can be mangroves or undeveloped land; use `min_buildings` to keep only populated gaps.",
+        "operationId": "gaps_gaps_get",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FacilityType",
+              "description": "Facility type"
+            },
+            "description": "Facility type"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Mode",
+              "description": "Travel mode"
+            },
+            "description": "Travel mode"
+          },
+          {
+            "name": "minutes",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "Time band in minutes",
+              "title": "Minutes"
+            },
+            "description": "Time band in minutes"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Speed scenario",
+              "default": "base",
+              "title": "Scenario"
+            },
+            "description": "Speed scenario"
+          },
+          {
+            "name": "min_buildings",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Only gaps with at least this many buildings",
+              "default": 0,
+              "title": "Min Buildings"
+            },
+            "description": "Only gaps with at least this many buildings"
+          },
+          {
+            "name": "simplify_m",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100,
+              "minimum": 0,
+              "description": "Simplify outlines by up to this many metres",
+              "default": 10,
+              "title": "Simplify M"
+            },
+            "description": "Simplify outlines by up to this many metres"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "type": "string",
+                  "$ref": "#/components/schemas/FeatureCollection_Feature_Polygon__GapProperties__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid combination of mode, minutes and scenario"
+          }
+        }
+      }
+    },
+    "/nearest": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Nearest facility from a point, with travel time and route",
+        "description": "Snaps the point to the nearest junction of the road network for the mode and returns three features: the `origin` (with `snap_m`, its distance to the road), the `route` (travel time in `minutes` and length) and the `facility`. The walk from the point to the road is not included in the time. The route geometry is null when the point snaps to the facility's own junction (0 minutes).",
+        "operationId": "nearest_nearest_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 90,
+              "minimum": -90,
+              "description": "Latitude (WGS 84)",
+              "title": "Lat"
+            },
+            "description": "Latitude (WGS 84)"
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "maximum": 180,
+              "minimum": -180,
+              "description": "Longitude (WGS 84)",
+              "title": "Lon"
+            },
+            "description": "Longitude (WGS 84)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FacilityType",
+              "description": "Facility type"
+            },
+            "description": "Facility type"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Mode",
+              "description": "Travel mode",
+              "default": "walk"
+            },
+            "description": "Travel mode"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Speed scenario",
+              "default": "base",
+              "title": "Scenario"
+            },
+            "description": "Speed scenario"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "type": "string",
+                  "$ref": "#/components/schemas/FeatureCollection_Feature_Union_Point__LineString__MultiLineString__NoneType___NearestProperties__"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No road nearby, or no facility within 60 minutes"
+          },
+          "422": {
+            "description": "Point outside the study area, or invalid parameters"
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": [
+          "access"
+        ],
+        "summary": "Share of buildings within each travel time",
+        "description": "Building coverage for every facility type, mode, scenario and time band. Filter with any of the parameters; omit them all for the full table.",
+        "operationId": "stats_stats_get",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FacilityType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Facility type",
+              "title": "Type"
+            },
+            "description": "Facility type"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Mode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Travel mode",
+              "title": "Mode"
+            },
+            "description": "Travel mode"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Speed scenario",
+              "title": "Scenario"
+            },
+            "description": "Speed scenario"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CoverageRow"
+                  },
+                  "title": "Response Stats Stats Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CoverageRow": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          },
+          "buildings_in": {
+            "type": "integer",
+            "title": "Buildings In"
+          },
+          "buildings_total": {
+            "type": "integer",
+            "title": "Buildings Total"
+          },
+          "pct": {
+            "type": "number",
+            "title": "Pct",
+            "description": "share of buildings within the time band, %"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "mode",
+          "scenario",
+          "minutes",
+          "buildings_in",
+          "buildings_total",
+          "pct"
+        ],
+        "title": "CoverageRow"
+      },
+      "Dataset": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "licence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Licence"
+          },
+          "data_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "source_url",
+          "licence",
+          "data_date"
+        ],
+        "title": "Dataset"
+      },
+      "FacilityProperties": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
+          },
+          "subtype": {
+            "type": "string",
+            "title": "Subtype",
+            "description": "hospital, health_centre, clinic, doctors or school"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "osm, or maina2019 (public facility list)"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "description": "e.g. way/123456 (OpenStreetMap) or maina2019/42"
+          },
+          "mapped_as": {
+            "type": "string",
+            "title": "Mapped As",
+            "description": "point or area in the source data"
+          },
+          "in_study": {
+            "type": "boolean",
+            "title": "In Study",
+            "description": "inside the study area (false: in the 5 km buffer)"
+          },
+          "snap_walk_m": {
+            "type": "number",
+            "title": "Snap Walk M",
+            "description": "distance to the walking network, metres"
+          },
+          "snap_drive_m": {
+            "type": "number",
+            "title": "Snap Drive M",
+            "description": "distance to the driving network, metres"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "subtype",
+          "name",
+          "operator",
+          "source",
+          "source_id",
+          "mapped_as",
+          "in_study",
+          "snap_walk_m",
+          "snap_drive_m"
+        ],
+        "title": "FacilityProperties"
+      },
+      "FacilityType": {
+        "type": "string",
+        "enum": [
+          "health",
+          "school"
+        ],
+        "title": "FacilityType"
+      },
+      "FeatureCollection_Feature_MultiPolygon__ServiceAreaProperties__": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature_MultiPolygon_ServiceAreaProperties_"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection[Feature[MultiPolygon, ServiceAreaProperties]]"
+      },
+      "FeatureCollection_Feature_Point__FacilityProperties__": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature_Point_FacilityProperties_"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection[Feature[Point, FacilityProperties]]"
+      },
+      "FeatureCollection_Feature_Polygon__GapProperties__": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature_Polygon_GapProperties_"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection[Feature[Polygon, GapProperties]]"
+      },
+      "FeatureCollection_Feature_Union_Point__LineString__MultiLineString__NoneType___NearestProperties__": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature_Union_Point__LineString__MultiLineString__NoneType__NearestProperties_"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection[Feature[Union[Point, LineString, MultiLineString, NoneType], NearestProperties]]"
+      },
+      "Feature_MultiPolygon_ServiceAreaProperties_": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultiPolygon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "properties": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceAreaProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "title": "Feature[MultiPolygon, ServiceAreaProperties]"
+      },
+      "Feature_Point_FacilityProperties_": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "properties": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FacilityProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "title": "Feature[Point, FacilityProperties]"
+      },
+      "Feature_Polygon_GapProperties_": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Polygon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "properties": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GapProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "title": "Feature[Polygon, GapProperties]"
+      },
+      "Feature_Union_Point__LineString__MultiLineString__NoneType__NearestProperties_": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Point"
+              },
+              {
+                "$ref": "#/components/schemas/LineString"
+              },
+              {
+                "$ref": "#/components/schemas/MultiLineString"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry"
+          },
+          "properties": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NearestProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "title": "Feature[Union[Point, LineString, MultiLineString, NoneType], NearestProperties]"
+      },
+      "GapProperties": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          },
+          "area_km2": {
+            "type": "number",
+            "title": "Area Km2"
+          },
+          "n_buildings": {
+            "type": "integer",
+            "title": "N Buildings",
+            "description": "buildings inside this gap area"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "mode",
+          "scenario",
+          "minutes",
+          "area_km2",
+          "n_buildings"
+        ],
+        "title": "GapProperties"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "database": {
+            "type": "boolean",
+            "title": "Database"
+          },
+          "osm_data_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Osm Data Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "database",
+          "osm_data_date"
+        ],
+        "title": "Health"
+      },
+      "LineString": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "LineString",
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Position2D"
+                },
+                {
+                  "$ref": "#/components/schemas/Position3D"
+                }
+              ]
+            },
+            "type": "array",
+            "minItems": 2,
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "LineString",
+        "description": "LineString Model"
+      },
+      "Meta": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "disclaimer": {
+            "type": "string",
+            "title": "Disclaimer"
+          },
+          "study_area": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Study Area"
+          },
+          "settings": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Settings",
+            "description": "buffer_m, cell_m, access_m"
+          },
+          "bands": {
+            "additionalProperties": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Bands",
+            "description": "time bands in minutes per mode"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/Scenario"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "drive_speeds_kmh": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Drive Speeds Kmh",
+            "description": "by OSM highway class; null = walking only"
+          },
+          "facilities": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Facilities",
+            "description": "facilities in the study area, by type"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/Dataset"
+            },
+            "type": "array",
+            "title": "Datasets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "disclaimer",
+          "study_area",
+          "settings",
+          "bands",
+          "scenarios",
+          "drive_speeds_kmh",
+          "facilities",
+          "datasets"
+        ],
+        "title": "Meta"
+      },
+      "Mode": {
+        "type": "string",
+        "enum": [
+          "walk",
+          "drive"
+        ],
+        "title": "Mode"
+      },
+      "MultiLineString": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "MultiLineString",
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Position2D"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Position3D"
+                  }
+                ]
+              },
+              "type": "array",
+              "minItems": 2
+            },
+            "type": "array",
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "MultiLineString",
+        "description": "MultiLineString Model"
+      },
+      "MultiPolygon": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "MultiPolygon",
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {
+              "items": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Position2D"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Position3D"
+                    }
+                  ]
+                },
+                "type": "array",
+                "minItems": 4
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "MultiPolygon",
+        "description": "MultiPolygon Model"
+      },
+      "NearestProperties": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "origin, route or facility"
+          },
+          "snap_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snap M",
+            "description": "origin: distance to the road network, m"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Mode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scenario"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes",
+            "description": "route: travel time on the road network"
+          },
+          "distance_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance M",
+            "description": "route: length on the road network"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FacilityType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtype": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtype"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "NearestProperties"
+      },
+      "Point": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Point",
+            "title": "Type"
+          },
+          "coordinates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Position2D"
+              },
+              {
+                "$ref": "#/components/schemas/Position3D"
+              }
+            ],
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "Point",
+        "description": "Point Model"
+      },
+      "Polygon": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Polygon",
+            "title": "Type"
+          },
+          "coordinates": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/Position2D"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Position3D"
+                  }
+                ]
+              },
+              "type": "array",
+              "minItems": 4
+            },
+            "type": "array",
+            "title": "Coordinates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "title": "Polygon",
+        "description": "Polygon Model"
+      },
+      "Position2D": {
+        "prefixItems": [
+          {
+            "type": "number",
+            "title": "Longitude"
+          },
+          {
+            "type": "number",
+            "title": "Latitude"
+          }
+        ],
+        "type": "array",
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "Position3D": {
+        "prefixItems": [
+          {
+            "type": "number",
+            "title": "Longitude"
+          },
+          {
+            "type": "number",
+            "title": "Latitude"
+          },
+          {
+            "type": "number",
+            "title": "Altitude"
+          }
+        ],
+        "type": "array",
+        "maxItems": 3,
+        "minItems": 3
+      },
+      "Scenario": {
+        "properties": {
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "applies_to": {
+            "type": "string",
+            "title": "Applies To"
+          },
+          "walk_kmh": {
+            "type": "number",
+            "title": "Walk Kmh"
+          },
+          "drive_factor": {
+            "type": "number",
+            "title": "Drive Factor"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scenario",
+          "applies_to",
+          "walk_kmh",
+          "drive_factor",
+          "description"
+        ],
+        "title": "Scenario"
+      },
+      "ServiceAreaProperties": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          },
+          "area_km2": {
+            "type": "number",
+            "title": "Area Km2",
+            "description": "land area within the time band"
+          },
+          "buildings_in": {
+            "type": "integer",
+            "title": "Buildings In",
+            "description": "buildings within the time band"
+          },
+          "buildings_total": {
+            "type": "integer",
+            "title": "Buildings Total",
+            "description": "buildings in the study area"
+          },
+          "buildings_pct": {
+            "type": "number",
+            "title": "Buildings Pct",
+            "description": "share of buildings within the time band, %"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "mode",
+          "scenario",
+          "minutes",
+          "area_km2",
+          "buildings_in",
+          "buildings_total",
+          "buildings_pct"
+        ],
+        "title": "ServiceAreaProperties"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

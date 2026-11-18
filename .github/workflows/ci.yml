@@ -1,0 +1,68 @@
+# Lint and tests on every push and pull request (a few minutes).
+# The SQL tests run against a real PostgreSQL + PostGIS + pgRouting service container.
+# API tests that need the full pipeline database are skipped here; see e2e.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.7"
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - run: uv sync --locked
+      - name: Ruff lint
+        run: uv run ruff check .
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      db:
+        image: pgrouting/pgrouting:17-3.5-3.8.0
+        env:
+          POSTGRES_DB: gis
+          POSTGRES_USER: gis
+          POSTGRES_PASSWORD: gis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U gis -d gis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      TEST_DATABASE_ADMIN_URL: postgresql://gis:gis@localhost:5432/gis
+      DATABASE_URL: postgresql://gis:gis@localhost:5432/gis
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.7"
+          enable-cache: true
+          cache-dependency-glob: api/uv.lock
+      - run: uv sync --locked
+      - name: Tests (routing SQL on the synthetic network, OpenAPI file up to date)
+        run: uv run pytest
