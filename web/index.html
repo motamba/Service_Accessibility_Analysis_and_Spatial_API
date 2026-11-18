@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Greater Banjul Access</title>
+  <meta name="description" content="How long it takes to walk or drive to the nearest health facility or school in Greater Banjul, The Gambia.">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css"
+        integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="map" role="region" aria-label="Map of Greater Banjul"></div>
+
+  <aside id="panel" aria-label="Controls and results">
+    <header class="panel-head">
+      <div>
+        <h1>Access to services</h1>
+        <p class="sub">Greater Banjul, The Gambia</p>
+      </div>
+      <button id="collapse" class="icon-btn" type="button" aria-expanded="true" aria-controls="panel-body"
+              title="Hide or show the panel">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
+
+    <div id="panel-body">
+      <form id="controls" onsubmit="return false">
+        <fieldset class="seg" id="ctl-type">
+          <legend>Facility</legend>
+          <label><input type="radio" name="type" value="health" checked><span>Health facilities</span></label>
+          <label><input type="radio" name="type" value="school"><span>Schools</span></label>
+        </fieldset>
+
+        <fieldset class="seg" id="ctl-mode">
+          <legend>Travel</legend>
+          <label><input type="radio" name="mode" value="walk" checked><span>Walking</span></label>
+          <label><input type="radio" name="mode" value="drive"><span>Driving</span></label>
+        </fieldset>
+
+        <fieldset class="seg" id="ctl-minutes">
+          <legend>Within</legend>
+          <!-- filled from the time bands of the selected mode -->
+        </fieldset>
+
+        <label class="field">
+          <span class="field-label">Speeds</span>
+          <select id="ctl-scenario" name="scenario"></select>
+        </label>
+
+        <fieldset class="seg" id="ctl-view">
+          <legend>Show</legend>
+          <label><input type="radio" name="view" value="area" checked><span>Areas and gaps</span></label>
+          <label><input type="radio" name="view" value="surface"><span>Travel time</span></label>
+        </fieldset>
+      </form>
+
+      <section class="stat" aria-live="polite">
+        <p class="hero"><span id="hero-value">–</span></p>
+        <p id="hero-text" class="hero-text">Loading…</p>
+        <p id="gap-text" class="muted small"></p>
+      </section>
+
+      <section aria-labelledby="bars-title">
+        <h2 id="bars-title" class="h2">Buildings within each time</h2>
+        <div id="bars" class="bars"></div>
+      </section>
+
+      <section aria-labelledby="legend-title">
+        <h2 id="legend-title" class="h2">Legend</h2>
+        <ul id="legend" class="legend"></ul>
+      </section>
+
+      <section id="nearest" class="nearest" aria-live="polite">
+        <p class="hint">Click the map to find the nearest facility and the route to it.</p>
+      </section>
+
+      <footer class="foot">
+        <p id="status" class="muted small" role="status"></p>
+        <p class="small"><strong>Indicative estimates</strong> based on OpenStreetMap and other open data and on assumed
+          speeds. Not for real planning or emergency decisions.</p>
+        <p class="small muted">
+          Data: © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors (ODbL);
+          Maina et al. (2019), CC BY 4.0; Google Open Buildings; OCHA COD-AB.
+          <span id="data-date"></span>
+          <a id="docs-link" href="#">API documentation</a>
+        </p>
+      </footer>
+    </div>
+  </aside>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+
+  <script src="config.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"
+          integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+</body>
+</html>

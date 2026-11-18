@@ -4,11 +4,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.db import pool
 from app.meta import meta
-from app.routers import facilities, gaps, health, info, nearest, service_areas, stats
+from app.routers import facilities, gaps, health, info, nearest, service_areas, stats, surface
 from app.text import ATTRIBUTION, DISCLAIMER, TITLE
 
 DESCRIPTION = """
@@ -38,6 +39,8 @@ app = FastAPI(
 
 # Read-only public data: any web page may call it.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
+# GeoJSON compresses very well (the hexagons: about 1 MB -> 0.15 MB).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-for module in (health, info, facilities, service_areas, gaps, nearest, stats):
+for module in (health, info, facilities, service_areas, gaps, nearest, stats, surface):
     app.include_router(module.router)

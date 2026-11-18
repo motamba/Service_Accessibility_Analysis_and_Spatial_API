@@ -12,6 +12,7 @@ SHELL         := /bin/bash
 
 include config/study_area.env
 include config/analysis.env
+include config/surface.env
 
 DATA  ?= /data
 RAW   := $(DATA)/raw
@@ -51,7 +52,7 @@ all:
 > @echo "Pipeline finished."
 > @$(MAKE) --no-print-directory status
 
-pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access $(STATE)/results
+pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access $(STATE)/results $(STATE)/surface
 > $(PSQLF) -f $(SQL)/90_checks.sql
 > @echo "Data-quality checks passed."
 > @$(PSQLF) -c "SELECT meta.log('config', 'buffer_m', $(BUFFER_M)), meta.log('config', 'cell_m', $(CELL_M)), meta.log('config', 'access_m', $(ACCESS_M))"
@@ -198,4 +199,9 @@ $(STATE)/grid: $(SQL)/55_grid.sql config/analysis.env $(STATE)/land $(STATE)/bui
 $(STATE)/results: $(SQL)/60_results.sql $(SQL)/40_functions.sql $(STATE)/grid $(STATE)/access
 > $(PSQLF) -f $(SQL)/40_functions.sql
 > $(PSQLF) -f $(SQL)/60_results.sql
+> touch $@
+
+# ---------------------------------------------------------------- travel-time surface (web map)
+$(STATE)/surface: $(SQL)/65_surface.sql config/surface.env $(STATE)/results
+> $(PSQLF) -v hex_m=$(HEX_M) -f $(SQL)/65_surface.sql
 > touch $@

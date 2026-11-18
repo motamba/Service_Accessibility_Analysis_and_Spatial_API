@@ -13,9 +13,11 @@ from app.schemas import (
     CoverageRow,
     FacilityCollection,
     GapCollection,
+    HexCollection,
     Meta,
     NearestCollection,
     ServiceAreaCollection,
+    Surface,
 )
 
 # Generous bounding box around Greater Banjul (lon/lat)
@@ -268,3 +270,42 @@ def test_meta_describes_assumptions(client):
     assert m.facilities["health"] > 0 and m.facilities["school"] > 0
     assert "indicative" in m.disclaimer
     assert any(d.name == "osm" for d in m.datasets)
+
+
+# ---------------------------------------------------------------- travel-time surface
+def test_surface_hexes_are_valid_geojson(client):
+    r = client.get("/surface/hexes")
+    assert r.status_code == 200
+    fc = HexCollection.model_validate(r.json())
+    ids = [f.id for f in fc.features]
+    assert len(ids) > 1000 and len(set(ids)) == len(ids)
+    assert "max-age" in r.headers.get("cache-control", "")
+
+
+def test_surface_rows_match_hexes_and_facilities(client):
+    hex_ids = {f["id"] for f in client.get("/surface/hexes").json()["features"]}
+    facility_ids = {
+        f["id"]
+        for f in client.get(
+            "/facilities", params={"type": "health", "include_buffer": True}
+        ).json()["features"]
+    }
+    s = Surface.model_validate(
+        client.get("/surface", params={"type": "health", "mode": "walk"}).json()
+    )
+    assert s.bands == [15, 30, 60]
+    assert s.hexes
+    for hex_id, minutes, facility_id in s.hexes:
+        assert hex_id in hex_ids
+        assert facility_id in facility_ids
+        assert minutes >= 0
+
+
+def test_surface_rejects_scenario_for_other_mode(client):
+    r = client.get("/surface", params={"type": "health", "mode": "drive", "scenario": "walk_fast"})
+    assert r.status_code == 422
+
+
+def test_responses_are_compressed(client):
+    r = client.get("/surface/hexes", headers={"Accept-Encoding": "gzip"})
+    assert r.headers.get("content-encoding") == "gzip"

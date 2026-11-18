@@ -59,6 +59,23 @@ services:
       timeout: 5s
       retries: 5
 
+  web:
+    # Web map: http://localhost:8080 (nginx serves ./web and forwards /api/ to the API)
+    image: nginx:1.28.0-alpine
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   test:
     # Tests: `docker compose run --rm test`. Builds a separate gis_test database on the same
     # server, so the real data is never touched. Not started by `docker compose up`.

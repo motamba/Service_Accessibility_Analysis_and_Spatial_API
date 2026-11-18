@@ -142,3 +142,20 @@ class Meta(BaseModel):
     )
     facilities: dict[str, int] = Field(description="facilities in the study area, by type")
     datasets: list[Dataset]
+
+
+# ---------------------------------------------------------------- surface
+class HexProperties(BaseModel):
+    # The hex_id is the GeoJSON Feature "id".
+    n_buildings: int
+
+
+HexCollection = FeatureCollection[Feature[MultiPolygon, HexProperties]]
+
+
+class Surface(BaseModel):
+    type: FacilityType
+    mode: Mode
+    scenario: str
+    bands: list[int] = Field(description="time bands of this mode, minutes (for the legend)")
+    hexes: list[tuple[int, float, int]] = Field(description="[hex_id, minutes, facility_id] rows")

@@ -478,6 +478,95 @@
           }
         }
       }
+    },
+    "/surface/hexes": {
+      "get": {
+        "tags": [
+          "surface"
+        ],
+        "summary": "Hexagons of the travel-time surface",
+        "description": "Hexagons (200 m sides, clipped to land) with the number of buildings in each. The Feature `id` is the `hex_id` used by `/surface`. Load once, then join the times.",
+        "operationId": "surface_hexes_surface_hexes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/geo+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureCollection_Feature_MultiPolygon__HexProperties__",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/surface": {
+      "get": {
+        "tags": [
+          "surface"
+        ],
+        "summary": "Travel time to the nearest facility, per hexagon",
+        "description": "Median travel time of each hexagon's 50 m analysis cells to the nearest facility, and the facility most of them are nearest to. Compact rows of `[hex_id, minutes, facility_id]`; hexagons with no road within 150 m are left out.",
+        "operationId": "surface_surface_get",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FacilityType",
+              "description": "Facility type"
+            },
+            "description": "Facility type"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Mode",
+              "description": "Travel mode"
+            },
+            "description": "Travel mode"
+          },
+          {
+            "name": "scenario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Speed scenario",
+              "default": "base",
+              "title": "Scenario"
+            },
+            "description": "Speed scenario"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -658,6 +747,80 @@
           "school"
         ],
         "title": "FacilityType"
+      },
+      "FeatureCollection_Feature_MultiPolygon__HexProperties__": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "FeatureCollection",
+            "title": "Type"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/Feature_MultiPolygon_HexProperties_"
+            },
+            "type": "array",
+            "title": "Features"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "features"
+        ],
+        "title": "FeatureCollection[Feature[MultiPolygon, HexProperties]]"
       },
       "FeatureCollection_Feature_MultiPolygon__ServiceAreaProperties__": {
         "properties": {
@@ -954,6 +1117,111 @@
           "features"
         ],
         "title": "FeatureCollection[Feature[Union[Point, LineString, MultiLineString, NoneType], NearestProperties]]"
+      },
+      "Feature_MultiPolygon_HexProperties_": {
+        "properties": {
+          "bbox": {
+            "anyOf": [
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array",
+                "maxItems": 6,
+                "minItems": 6
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          },
+          "type": {
+            "type": "string",
+            "const": "Feature",
+            "title": "Type"
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultiPolygon"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "properties": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HexProperties"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "geometry",
+          "properties"
+        ],
+        "title": "Feature[MultiPolygon, HexProperties]"
       },
       "Feature_MultiPolygon_ServiceAreaProperties_": {
         "properties": {
@@ -1461,6 +1729,19 @@
           "osm_data_date"
         ],
         "title": "Health"
+      },
+      "HexProperties": {
+        "properties": {
+          "n_buildings": {
+            "type": "integer",
+            "title": "N Buildings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_buildings"
+        ],
+        "title": "HexProperties"
       },
       "LineString": {
         "properties": {
@@ -2225,6 +2506,58 @@
           "buildings_pct"
         ],
         "title": "ServiceAreaProperties"
+      },
+      "Surface": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/FacilityType"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "scenario": {
+            "type": "string",
+            "title": "Scenario"
+          },
+          "bands": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Bands",
+            "description": "time bands of this mode, minutes (for the legend)"
+          },
+          "hexes": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 3,
+              "minItems": 3
+            },
+            "type": "array",
+            "title": "Hexes",
+            "description": "[hex_id, minutes, facility_id] rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "mode",
+          "scenario",
+          "bands",
+          "hexes"
+        ],
+        "title": "Surface"
       },
       "ValidationError": {
         "properties": {

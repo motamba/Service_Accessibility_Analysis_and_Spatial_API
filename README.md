@@ -22,6 +22,7 @@ The first run downloads the data (about 220 MB) and builds the database, which t
 
 | What | Where |
 |---|---|
+| **Web map** | http://localhost:8080 |
 | API documentation (try the endpoints in the browser) | http://localhost:8000/docs |
 | API | http://localhost:8000 |
 | Database (QGIS, `psql`) | `localhost:5433`, database `gis`, user `gis`, password `gis` |
@@ -143,6 +144,22 @@ These are indicative estimates. They depend on how complete OpenStreetMap is (sc
 
 ---
 
+## Web map
+
+http://localhost:8080 (served by nginx, which also forwards `/api/` to the API).
+
+- Choose the facility type (health facilities or schools), walking or driving, the time band and the speed scenario.
+- **Areas** shows the land within the time band (blue) and the gaps beyond it (orange); hover a gap for its number of buildings.
+- **Travel time** shows the time to the nearest facility in 200 m hexagons (median of the 50 m analysis cells), in four classes from the time bands; hover a hexagon for its time, buildings and nearest facility.
+- The panel shows the share of buildings within the chosen time, how many are further away and in how many separate areas, and the share for each time band (click a bar to switch).
+- **Click the map** to get the nearest facility, the travel time and the route.
+
+Built with MapLibre GL JS 5.24 (loaded with a subresource-integrity hash) and an OpenFreeMap basemap (Positron, or Dark when the system is in dark mode); plain HTML, CSS and JavaScript with no build step. The travel-time colours are a single blue ramp checked for colour-vision deficiency and contrast, with separate light and dark versions. On small screens the panel becomes a bottom sheet that can be collapsed.
+
+The same page also runs without a backend (`dataSource: "static"` in [`web/config.js`](web/config.js)), reading pre-exported files instead of the API; this is used for the GitHub Pages demo.
+
+---
+
 ## API
 
 Read-only REST API (FastAPI). Responses are GeoJSON (`application/geo+json`, WGS 84), built directly in PostGIS. Full interactive documentation (OpenAPI) is at `/docs`.
@@ -156,6 +173,8 @@ Read-only REST API (FastAPI). Responses are GeoJSON (`application/geo+json`, WGS
 | `GET /gaps` | same as `/service-areas`, plus `min_buildings` (default 0) | One polygon per area beyond the time band, with `area_km2` and `n_buildings`, most buildings first |
 | `GET /nearest` | `lat`, `lon`, `type`, `mode` (default `walk`), `scenario` (default `base`) | Three features: `origin` (with `snap_m`), `route` (with `minutes`, `distance_m`) and `facility` |
 | `GET /stats` | `type`, `mode`, `scenario` (all optional filters) | Building coverage table (JSON) |
+| `GET /surface/hexes` | – | Hexagons of the travel-time surface (200 m sides, clipped to land) with `n_buildings`; the Feature `id` is the hexagon id |
+| `GET /surface` | `type`, `mode`, `scenario` | Compact JSON rows `[hex_id, minutes, facility_id]` to colour the hexagons |
 
 Time bands: walk 15 / 30 / 60 min, drive 5 / 10 / 15 min. Scenarios: `base` (both modes), `walk_slow` and `walk_fast` (walking only), `drive_congested` (driving only).
 
@@ -227,7 +246,7 @@ api/              Python project (uv): FastAPI app (app/, one SQL file per endpo
 data/             downloads and intermediate files (not in git)
 ```
 
-The web map is added as development continues.
+web/              web map: index.html, app.js, style.css, config.js, nginx.conf (no build step)
 
 ---
 
