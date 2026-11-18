@@ -18,9 +18,15 @@ git clone <repo-url> && cd service-accessibility-api-greater-banjul
 docker compose up --build
 ```
 
-The first run downloads the data (about 100 MB) and builds the database. Later runs skip finished steps.
+The first run downloads the data (about 220 MB) and builds the database, which takes roughly 10–15 minutes. Later runs skip finished steps and start in about a minute. The API starts once the data pipeline has finished.
 
-Connect QGIS or `psql` to the database on `localhost:5433` (database `gis`, user `gis`, password `gis`; override in `.env`, see `.env.example`).
+| What | Where |
+|---|---|
+| API documentation (try the endpoints in the browser) | http://localhost:8000/docs |
+| API | http://localhost:8000 |
+| Database (QGIS, `psql`) | `localhost:5433`, database `gis`, user `gis`, password `gis` |
+
+Ports and passwords can be changed in `.env` (see `.env.example`).
 
 Useful commands:
 
@@ -137,6 +143,40 @@ These are indicative estimates. They depend on how complete OpenStreetMap is (sc
 
 ---
 
+## API
+
+Read-only REST API (FastAPI). Responses are GeoJSON (`application/geo+json`, WGS 84), built directly in PostGIS. Full interactive documentation (OpenAPI) is at `/docs`.
+
+| Endpoint | Parameters | Returns |
+|---|---|---|
+| `GET /health` | – | Service and database status, OSM data date |
+| `GET /meta` | – | Assumptions (speeds, scenarios, time bands, grid settings), study area, facility counts, data sources and licences (JSON) |
+| `GET /facilities` | `type` = `health` \| `school` (optional), `include_buffer` (default `false`) | Facility points; the facility id is the Feature `id` |
+| `GET /service-areas` | `type`, `mode` = `walk` \| `drive`, `minutes`, `scenario` (default `base`), `simplify_m` (0–100, default 10) | Land within the time band, with `area_km2`, `buildings_in`, `buildings_total`, `buildings_pct` |
+| `GET /gaps` | same as `/service-areas`, plus `min_buildings` (default 0) | One polygon per area beyond the time band, with `area_km2` and `n_buildings`, most buildings first |
+| `GET /nearest` | `lat`, `lon`, `type`, `mode` (default `walk`), `scenario` (default `base`) | Three features: `origin` (with `snap_m`), `route` (with `minutes`, `distance_m`) and `facility` |
+| `GET /stats` | `type`, `mode`, `scenario` (all optional filters) | Building coverage table (JSON) |
+
+Time bands: walk 15 / 30 / 60 min, drive 5 / 10 / 15 min. Scenarios: `base` (both modes), `walk_slow` and `walk_fast` (walking only), `drive_congested` (driving only).
+
+```bash
+curl "http://localhost:8000/service-areas?type=health&mode=walk&minutes=30"
+curl "http://localhost:8000/gaps?type=health&mode=walk&minutes=30&min_buildings=500"
+curl "http://localhost:8000/nearest?lat=13.439&lon=-16.680&type=health"
+```
+
+**How `/nearest` works.** The point is snapped to the nearest junction of the road network for the mode (its distance is returned as `snap_m`; points more than 1 km from a road get 404). The travel time is that junction's pre-computed time to the nearest facility, so it always matches the service areas. The route is drawn with `pgr_dijkstra`, searching only the roads within 2 km of the box around the point and the facility (about 0.1 s instead of 0.5 s for the whole network), with a fallback to the whole network if no route is found there. The walk from the point to the road is not included in the time.
+
+Invalid combinations return **422** with a message listing the valid choices, for example:
+
+```json
+{"detail": "minutes=60 is not available for mode=drive; choose one of [5, 10, 15]"}
+```
+
+A 30-minute service area is about 60 KB with the default 10 m simplification (`simplify_m=0` returns the full 50 m-grid outline, about 110 KB). The database connection is read-only with a statement timeout.
+
+---
+
 ## Data quality (current run)
 
 | Measure | Value |
@@ -182,7 +222,7 @@ Buildings are kept when their confidence is at least **0.782**, Google's publish
 ```
 db/init/          database extensions (runs when the volume is first created)
 etl/              data pipeline: Dockerfile, Makefile, config/, sql/
-api/              Python project (uv): API (in progress) and tests
+api/              Python project (uv): FastAPI app (app/, one SQL file per endpoint in app/sql/) and tests
   tests/          pytest suite; fixtures/ holds the synthetic test network
 data/             downloads and intermediate files (not in git)
 ```

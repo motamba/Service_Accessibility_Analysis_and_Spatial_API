@@ -54,6 +54,7 @@ all:
 pipeline: $(STATE)/land $(STATE)/network $(STATE)/facilities $(STATE)/buildings $(STATE)/access $(STATE)/results
 > $(PSQLF) -f $(SQL)/90_checks.sql
 > @echo "Data-quality checks passed."
+> @$(PSQLF) -c "SELECT meta.log('config', 'buffer_m', $(BUFFER_M)), meta.log('config', 'cell_m', $(CELL_M)), meta.log('config', 'access_m', $(ACCESS_M))"
 
 # Stamps live in ./data but the database lives in a Docker volume. If the database was
 # recreated (e.g. `docker compose down -v`), the stamps are stale: forget them.

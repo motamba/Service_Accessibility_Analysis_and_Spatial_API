@@ -41,6 +41,24 @@ services:
     volumes:
       - ./data:/data
 
+  api:
+    # REST API (FastAPI). Starts once the pipeline has finished. Docs: http://localhost:8000/docs
+    build: ./api
+    depends_on:
+      db:
+        condition: service_healthy
+      etl:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gis}:${POSTGRES_PASSWORD:-gis}@db:5432/gis
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   test:
     # Tests: `docker compose run --rm test`. Builds a separate gis_test database on the same
     # server, so the real data is never touched. Not started by `docker compose up`.
@@ -55,6 +73,7 @@ services:
         condition: service_healthy
     environment:
       TEST_DATABASE_ADMIN_URL: postgresql://${POSTGRES_USER:-gis}:${POSTGRES_PASSWORD:-gis}@db:5432/gis
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gis}:${POSTGRES_PASSWORD:-gis}@db:5432/gis
       ETL_SQL_DIR: /etl-sql
     volumes:
       - ./api:/app
