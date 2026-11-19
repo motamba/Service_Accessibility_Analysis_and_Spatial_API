@@ -6,21 +6,27 @@ This project builds the answer with **PostgreSQL + PostGIS + pgRouting**, serves
 
 **Live demo (static, pre-computed results):** https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/  ·  [API reference](https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/api-docs.html)
 
-> **Status:** in development (personal portfolio project, November–December 2026).
+**Summary (one page):** [docs/summary.pdf](docs/summary.pdf)  ·  **20-second demo:** [docs/media/demo.mp4](docs/media/demo.mp4)
+
+![Web map: walking time to the nearest health facility in Greater Banjul](docs/img/map-travel-time.jpg)
+
+> **Status:** completed personal portfolio project (November 2026).
 > Results are **indicative estimates based on OpenStreetMap data** and must not be used for real planning or emergency decisions.
 
 ---
 
 ## Quick start
 
-Requirements: Docker with Docker Compose.
+Requirements: Docker with Docker Compose, about 3 GB of disk space and an internet connection for the first run.
+
+On Linux the data-pipeline container writes to `./data` as user id 1000 (the default first user). If `id -u` shows a different number, copy `.env.example` to `.env` and set `HOST_UID` and `HOST_GID` to the output of `id -u` and `id -g`.
 
 ```bash
 git clone <repo-url> && cd service-accessibility-api-greater-banjul
 docker compose up --build
 ```
 
-The first run downloads the data (about 220 MB) and builds the database, which takes roughly 10–15 minutes. Later runs skip finished steps and start in about a minute. The API starts once the data pipeline has finished.
+The first run downloads the data (about 220 MB) and builds the database, which takes about 15 minutes (tested on a fresh clone: 14 min 42 s). Later runs skip finished steps and start in about a minute. The API starts once the data pipeline has finished.
 
 | What | Where |
 |---|---|
@@ -142,7 +148,56 @@ Share of buildings within each travel time of the nearest facility (160,489 buil
 
 **Largest gap:** about 38,900 buildings (24 %) are more than a 30-minute walk from a health facility. Most of them (33,600) are in one connected area in eastern Kombo North, between Lamin, Yundum and Banjulinding.
 
-These are indicative estimates. They depend on how complete OpenStreetMap is (schools in particular may be under-mapped) and on the assumed speeds.
+| Within a 30-minute walk of a health facility (blue) and the gaps (orange) | Nearest facility from a point in that gap |
+|---|---|
+| ![Service area and gaps](docs/img/map-areas-map.jpg) | ![Route to the nearest health facility](docs/img/map-nearest-map.jpg) |
+
+Most of the large orange area in the north-east is the Tanbi mangrove wetland, with few buildings; the gaps that matter are the populated ones in the south and east, which is why gaps are reported by **number of buildings** (`/gaps?min_buildings=500` keeps only those). From a point in the eastern Kombo North gap, the nearest health facility (Lamin Health Centre) is a **58.5-minute walk** (4.4 km by road) or an **8-minute drive**.
+
+What the numbers suggest:
+
+- **Walking is the constraint, not driving.** Almost every building is within 15 minutes' free-flow drive of a health facility (99.8 %), but only three in four are within a 30-minute walk, so for people without a car the location of facilities matters most.
+- **The fast-growing south-east is the least served on foot.** The area between Lamin, Yundum and Banjulinding holds most of the buildings beyond 30 minutes.
+- **Traffic changes the driving picture a lot.** With driving speeds × 0.6 the share within 5 minutes of a health facility falls from 70.7 % to 40.2 %.
+- **Schools are closer than health facilities**, but schools are probably under-mapped in OpenStreetMap, so their real coverage is likely higher still.
+
+These are indicative estimates; see [Limitations](#limitations).
+
+---
+
+## Limitations
+
+**Data**
+
+- **Schools are probably under-counted.** OSM has 81 schools in the study area and no open alternative list was found; an area can show as a gap because a school is not mapped.
+- **Facility tags are sometimes wrong** in OSM (a pharmacy tagged as a hospital, clinics tagged as hospitals), so facility subtypes are indicative; all health facility types count the same.
+- **The public facility list is from 2019** and covers public, NGO and community facilities only; private clinics come from OSM alone. Matching it to OSM by name can miss a facility whose names differ a lot.
+- **Building points are detected from satellite imagery** (Google Open Buildings, confidence ≥ 0.782) and include some false detections and missed buildings; buildings stand in for people, as no population weighting is applied.
+- **The road network is OpenStreetMap as of 13 November 2026.** Missing or misclassified roads change travel times; 3,549 km of streets are tagged *residential*, many of them unpaved in reality.
+
+**Method**
+
+- **Fixed free-flow speeds** by road class; no real traffic, public transport, road surface or season (flooding is not modelled). The sensitivity scenarios show how much this matters.
+- **The walk from home to the nearest road is not timed**; land within 150 m of a usable road is treated as reachable.
+- **Travel time ends at the nearest facility** of a type, whatever its size, opening hours, capacity, cost or quality of care.
+- **The 50 m grid and 200 m hexagons** simplify the outlines; the static demo shows a hexagon's typical time instead of an exact route.
+- **The study area boundary** (Banjul, Kanifing, Kombo North) is a choice; a 5 km buffer lets facilities just outside it count.
+
+---
+
+## Deliverables
+
+| | Where |
+|---|---|
+| Source code, SQL, Docker Compose, CI | this repository |
+| Pre-computed layers (GeoJSON, ODbL) | [`web/data/`](web/data/) |
+| REST API documentation (OpenAPI) | [`api/openapi.json`](api/openapi.json), `/docs` when running, [API reference online](https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/api-docs.html) |
+| Interactive web map | http://localhost:8080 (full), [GitHub Pages](https://motamba.github.io/Service_Accessibility_Analysis_and_Spatial_API/) (static) |
+| One-page summary | [`docs/summary.pdf`](docs/summary.pdf) (source: [`docs/summary.html`](docs/summary.html)) |
+| 20-second screen recording | [`docs/media/demo.mp4`](docs/media/demo.mp4) |
+| Screenshots | [`docs/img/`](docs/img/) |
+
+The video was assembled from screenshots of the real local map, taken after each step had fully rendered, with the pointer movement composited in, because recording the screen live in a container without a GPU dropped frames.
 
 ---
 
@@ -241,16 +296,9 @@ Sanity check: Albert Market (Banjul) to Serekunda market takes 14 min by car (13
 | Public health facilities | Maina, J. et al. (2019). *A spatial database of health facilities managed by the public health sector in sub-Saharan Africa.* Scientific Data 6, 134. Via [HDX](https://data.humdata.org/dataset/health-facilities-in-sub-saharan-africa) | CC BY 4.0 | Health facilities missing from OSM |
 | Buildings | [Google Open Buildings v3](https://sites.research.google/open-buildings/), points, tile `0ed` | CC BY 4.0 / ODbL 1.0 | Counting buildings in gap areas and travel-time bands |
 
-Buildings are kept when their confidence is at least **0.782**, Google's published threshold for 85 % precision in this tile. The exact OSM data date is stored in the database table `meta.dataset` and will be listed here with the results.
+Buildings are kept when their confidence is at least **0.782**, Google's published threshold for 85 % precision in this tile. The results use **OpenStreetMap data of 13 November 2026** (Geofabrik extract; the date is also stored in the database table `meta.dataset` and returned by `/meta`).
 
 **Share-alike:** the published GeoJSON layers are derived from OpenStreetMap and are therefore made available under the ODbL, with attribution to all sources above.
-
-### Known data limitations
-
-- **Schools are probably under-counted.** OSM has 81 schools in the study area and no open alternative list was found; areas may show as "gaps" because a school is not mapped.
-- **OSM tags are sometimes wrong** (e.g. a pharmacy tagged as a hospital, clinics tagged as hospitals), so facility subtypes are indicative.
-- **The public facility list is from 2019** and covers public, NGO and community facilities only; private clinics come from OSM alone.
-- **Building points are detected from satellite imagery** and include some false detections and missed buildings.
 
 ---
 
@@ -269,6 +317,7 @@ web/              web map: index.html, app.js, style.css, config.js, nginx.conf 
   data/           exported layers for the static demo (ODbL), from `docker compose run --rm export`
   api-docs.html   API reference page (Redoc) for the static site
 scripts/          build_pages.sh: assembles the GitHub Pages site
+docs/             summary.pdf (+ summary.html source), media/demo.mp4, img/ screenshots
 
 ---
 

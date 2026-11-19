@@ -1,0 +1,3 @@
+# Downloads and intermediate files of the data pipeline (not in git).
+# This placeholder makes `git clone` create the folder owned by you, so the ETL container
+# (which runs as your user) can write to it.

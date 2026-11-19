@@ -1,5 +1,6 @@
 # downloaded and intermediate data (large, re-creatable); web/data (exported layers) IS committed
-/data/
+/data/*
+!/data/.gitkeep
 
 # local settings
 .env
