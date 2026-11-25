@@ -100,13 +100,16 @@ h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-2); margin: 0 0 8px; }
 #panel-body { padding: 12px 16px 16px; display: grid; gap: 16px; }
 #panel.collapsed #panel-body { display: none; }
-#panel.collapsed .icon-btn svg { transform: rotate(180deg); }
+#panel.collapsed #collapse svg { transform: rotate(180deg); }
 
 .icon-btn {
   flex: none; width: 32px; height: 32px; display: grid; place-items: center;
   border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink-2); cursor: pointer;
 }
 .icon-btn svg { width: 16px; height: 16px; transition: transform 0.15s; }
+.icon-btn svg[hidden] { display: none; }
+.icon-btn:hover { color: var(--ink); }
+.head-actions { display: flex; gap: 6px; flex: none; }
 
 /* ------------------------------------------------------------------ controls */
 #controls { display: grid; gap: 10px; }
@@ -194,8 +197,8 @@ select {
   }
   #panel-body { padding: 10px 16px 16px; }
   .hero { font-size: 28px; }
-  #panel.collapsed .icon-btn svg { transform: rotate(0deg); }
-  .icon-btn svg { transform: rotate(180deg); }
+  #panel.collapsed #collapse svg { transform: rotate(0deg); }
+  #collapse svg { transform: rotate(180deg); }
 }
 
 @media (forced-colors: active) {

@@ -22,7 +22,7 @@ const LABEL = {
 const state = { type: "health", mode: "walk", minutes: 30, scenario: "base", view: "area" };
 const cache = new Map();          // url -> parsed JSON
 let META = null, STATS = [], HEX_IDS = [];
-let current = { sa: null, gaps: null, surface: null, facilities: null };
+let current = { sa: null, gaps: null, surface: null, facilities: null, route: null };
 let facilityById = new Map();
 let selectedFacility = null;
 
@@ -144,7 +144,7 @@ function addLayers() {
   src("sa", current.sa);
   src("gaps", current.gaps);
   src("facilities", current.facilities);
-  src("route", EMPTY);
+  src("route", current.route);
 
   map.addLayer({
     id: "hex-fill", type: "fill", source: "hexes",
@@ -194,6 +194,8 @@ function addLayers() {
 }
 
 function setData(id, data) { const s = map.getSource(id); if (s) s.setData(data || EMPTY); }
+// The route is kept so it can be redrawn after a theme switch (which reloads the basemap style).
+function setRoute(fc) { current.route = fc && fc.features.length ? fc : null; setData("route", current.route); }
 
 function applyView() {
   const area = state.view === "area";
@@ -335,7 +337,7 @@ function renderLegend() {
 
 // ---------------------------------------------------------------- nearest
 function clearNearest() {
-  setData("route", EMPTY);
+  setRoute(null);
   if (selectedFacility != null && map.getSource("facilities")) {
     map.setFeatureState({ source: "facilities", id: selectedFacility }, { selected: false });
   }
@@ -368,14 +370,14 @@ async function onMapClick(e) {
   try {
     const fc = await api.nearest(lat.toFixed(6), lng.toFixed(6), state);
     const by = Object.fromEntries(fc.features.map((f) => [f.properties.role, f]));
-    setData("route", { type: "FeatureCollection", features: [by.route, by.origin].filter((f) => f && f.geometry) });
+    setRoute({ type: "FeatureCollection", features: [by.route, by.origin].filter((f) => f && f.geometry) });
     selectFacility(by.facility.id);
     showNearestCard({
       name: by.facility.properties.name, subtype: by.facility.properties.subtype,
       minutes: by.route.properties.minutes, distance: by.route.properties.distance_m, snap: by.origin.properties.snap_m,
     });
   } catch (err) {
-    setData("route", EMPTY); selectFacility(null);
+    setRoute(null); selectFacility(null);
     $("#nearest").replaceChildren(el("p", { class: "error" }, err.message));
   }
 }
@@ -391,7 +393,7 @@ async function staticNearest(e) {
   const origin = { type: "Feature", properties: { role: "origin" }, geometry: { type: "Point", coordinates: [e.lngLat.lng, e.lngLat.lat] } };
   const line = fac ? { type: "Feature", properties: { role: "route", estimate: true },
     geometry: { type: "LineString", coordinates: [[e.lngLat.lng, e.lngLat.lat], fac.geometry.coordinates] } } : null;
-  setData("route", { type: "FeatureCollection", features: [line, origin].filter(Boolean) });
+  setRoute({ type: "FeatureCollection", features: [line, origin].filter(Boolean) });
   selectFacility(fac ? fac.id : null);
   showNearestCard({
     name: fac?.properties.name, subtype: fac?.properties.subtype, minutes: row[1],
@@ -442,15 +444,50 @@ function bindHover() {
 }
 
 // ---------------------------------------------------------------- theme
-function restyle() {
-  map.setStyle(isDark() ? STYLE_URL.dark : STYLE_URL.light);
-  map.once("style.load", () => { addLayers(); setData("sa", current.sa); paintSurface(); if (selectedFacility != null) selectFacility(selectedFacility); renderLegend(); });
+// Three choices: "auto" follows the system setting, "light" and "dark" override it.
+// The choice is a per-browser convenience kept in localStorage (it may be unavailable).
+const THEMES = ["auto", "light", "dark"];
+const THEME_LABEL = { auto: "automatic", light: "light", dark: "dark" };
+let themeChoice = (() => { try { return THEMES.includes(localStorage.getItem("theme")) ? localStorage.getItem("theme") : "auto"; } catch (_) { return "auto"; } })();
+let mapIsDark = isDark();
+
+function showThemeButton() {
+  const btn = $("#theme");
+  // SVG elements have no .hidden property: set the attribute itself.
+  btn.querySelectorAll("svg").forEach((svg) => svg.toggleAttribute("hidden", svg.dataset.icon !== themeChoice));
+  const next = THEMES[(THEMES.indexOf(themeChoice) + 1) % THEMES.length];
+  btn.title = `Colour theme: ${THEME_LABEL[themeChoice]} (click for ${THEME_LABEL[next]})`;
+  btn.setAttribute("aria-label", `Colour theme: ${THEME_LABEL[themeChoice]}`);
 }
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", restyle);
+
+function setTheme(choice) {
+  themeChoice = choice;
+  if (choice === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", choice);
+  try { localStorage.setItem("theme", choice); } catch (_) { /* private mode: not remembered */ }
+  showThemeButton();
+  restyle();
+}
+
+// Swap the basemap (and our layer colours) only when light/dark actually changes.
+function restyle() {
+  const dark = isDark();
+  renderLegend();
+  if (dark === mapIsDark) return;
+  mapIsDark = dark;
+  map.setStyle(dark ? STYLE_URL.dark : STYLE_URL.light);
+  map.once("style.load", () => {
+    addLayers(); paintSurface();
+    if (selectedFacility != null) selectFacility(selectedFacility);
+  });
+}
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (themeChoice === "auto") restyle(); });
 
 // ---------------------------------------------------------------- start
 async function start() {
   $("#controls").addEventListener("change", onControlChange);
+  showThemeButton();
+  $("#theme").addEventListener("click", () => setTheme(THEMES[(THEMES.indexOf(themeChoice) + 1) % THEMES.length]));
   $("#collapse").addEventListener("click", () => {
     const p = $("#panel"); const c = p.classList.toggle("collapsed");
     $("#collapse").setAttribute("aria-expanded", String(!c));

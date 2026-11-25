@@ -211,7 +211,7 @@ http://localhost:8080 (served by nginx, which also forwards `/api/` to the API).
 - The panel shows the share of buildings within the chosen time, how many are further away and in how many separate areas, and the share for each time band (click a bar to switch).
 - **Click the map** to get the nearest facility, the travel time and the route.
 
-Built with MapLibre GL JS 5.24 (loaded with a subresource-integrity hash) and an OpenFreeMap basemap (Positron, or Dark when the system is in dark mode); plain HTML, CSS and JavaScript with no build step. The travel-time colours are a single blue ramp checked for colour-vision deficiency and contrast, with separate light and dark versions. On small screens the panel becomes a bottom sheet that can be collapsed.
+Built with MapLibre GL JS 5.24 (loaded with a subresource-integrity hash) and an OpenFreeMap basemap (Positron or Dark). A button in the panel header switches between automatic (follows the system), light and dark themes and remembers the choice in the browser; plain HTML, CSS and JavaScript with no build step. The travel-time colours are a single blue ramp checked for colour-vision deficiency and contrast, with separate light and dark versions. On small screens the panel becomes a bottom sheet that can be collapsed.
 
 ### Static demo (GitHub Pages)
 
